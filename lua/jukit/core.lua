@@ -1,0 +1,217 @@
+local M = {}
+local State = require("jukit.state")
+local Config = require("jukit.config")
+local UI = require("jukit.ui")
+local Utils = require("jukit.utils")
+
+local function on_stdout(chan_id, data, name)
+    if not data then return end
+    for _, line in ipairs(data) do
+        if line ~= "" then
+            local ok, msg = pcall(vim.fn.json_decode, line)
+            if ok and msg then
+                vim.schedule(function()
+                    if msg.type == "stream" then
+                        UI.append_stream_text(msg.text)
+                    elseif msg.type == "image_saved" then
+                        UI.append_to_repl("[Image Created]: " .. vim.fn.fnamemodify(msg.path, ":t"), "Special")
+                    elseif msg.type == "result_ready" then
+                        UI.append_to_repl("-> Done: " .. msg.cell_id, "Comment")
+                        State.current_preview_file = nil 
+                        UI.open_markdown_preview(msg.file)
+                        
+                        local target_buf = State.cell_buf_map[msg.cell_id]
+                        if target_buf and vim.api.nvim_buf_is_valid(target_buf) then
+                            local start_t = State.cell_start_time[msg.cell_id]
+                            if start_t and (os.time() - start_t) >= Config.options.notify_threshold then
+                                UI.send_notification("Calculation " .. msg.cell_id .. " Finished!")
+                            end
+
+			    -- vim.diagnostic.reset(State.diag_ns, target_buf)
+
+                            vim.api.nvim_buf_clear_namespace(target_buf, State.diag_ns, 0, -1)
+                            if msg.error then
+                                UI.set_cell_status(target_buf, msg.cell_id, "error", "✘ Error")
+                                local start_line = State.cell_start_line[msg.cell_id] or 1
+                                local target_line = (start_line - 1) + (msg.error.line - 1)
+                                vim.diagnostic.set(State.diag_ns, target_buf, {{
+                                    lnum = target_line, col = 0, message = msg.error.msg,
+                                    severity = vim.diagnostic.severity.ERROR, source = "Jukit",
+                                }})
+                            else
+                                UI.set_cell_status(target_buf, msg.cell_id, "done", " Done")
+                            end
+                        end
+                        State.cell_buf_map[msg.cell_id] = nil
+                        State.cell_start_time[msg.cell_id] = nil
+                        State.cell_start_line[msg.cell_id] = nil
+
+                    elseif msg.type == "variable_list" then
+                        UI.show_variables(msg.variables)
+                    elseif msg.type == "dataframe_data" then
+                        UI.show_dataframe(msg)
+                    elseif msg.type == "input_request" then
+                        UI.append_to_repl("[Input Requested]: " .. msg.prompt, "Special")
+                        vim.ui.input({ prompt = msg.prompt }, function(input)
+                            local value = input or ""
+                            UI.append_to_repl(value)
+                            if State.job_id then
+                                local reply = vim.fn.json_encode({ command = "input_reply", value = value })
+                                vim.fn.chansend(State.job_id, reply .. "\n")
+                            end
+                        end)
+                    end
+                end)
+            end
+        end
+    end
+end
+
+function M.clean_stale_cache()
+    if not State.job_id then return end
+    local filename = vim.fn.expand("%:t")
+    if filename == "" then return end
+    local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+    local valid_ids = {}
+    for _, line in ipairs(lines) do
+        local id = line:match("id=\"([%w%-_]+)\"")
+        if id then table.insert(valid_ids, id) end
+    end
+    local msg = vim.fn.json_encode({
+        command = "clean_cache", filename = filename, valid_ids = valid_ids
+    })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
+function M.start_kernel()
+    if State.job_id then return end
+    local script = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jukit/kernel.py"
+    local cmd = vim.split(Config.options.python_interpreter, " ")
+    table.insert(cmd, script)
+    State.job_id = vim.fn.jobstart(cmd, {
+        on_stdout = on_stdout, on_stderr = on_stdout, stdout_buffered = false,
+        on_exit = function() State.job_id = nil end
+    })
+    UI.append_to_repl("[Jukit Kernel Started]")
+    vim.defer_fn(function() M.clean_stale_cache() end, 500)
+end
+
+function M.restart_kernel()
+    if State.job_id then vim.fn.jobstop(State.job_id); State.job_id = nil end
+    UI.append_to_repl("[Kernel Restarting...]", "WarningMsg")
+    M.start_kernel()
+end
+
+function M.send_payload(code, cell_id, filename)
+    if not State.job_id then M.start_kernel() end
+    local current_buf = vim.api.nvim_get_current_buf()
+    
+    State.cell_buf_map[cell_id] = current_buf
+    State.cell_start_time[cell_id] = os.time()
+    
+    local lines = vim.api.nvim_buf_get_lines(current_buf, 0, -1, false)
+    for i, line in ipairs(lines) do
+        if line:find('id="' .. cell_id .. '"', 1, true) then
+            State.cell_start_line[cell_id] = i + 1 
+            break
+        end
+    end
+
+    vim.diagnostic.reset(State.diag_ns, current_buf)
+
+    vim.api.nvim_buf_clear_namespace(current_buf, State.diag_ns, 0, -1)
+    UI.set_cell_status(current_buf, cell_id, "running", "⏳ Running...")
+    
+    UI.append_to_repl({"In [" .. cell_id .. "]:"}, "Type")
+    local code_lines = vim.split(code, "\n")
+    local indented = {}
+    for _, l in ipairs(code_lines) do table.insert(indented, "    " .. l) end
+    UI.append_to_repl(indented)
+    UI.append_to_repl({""})
+
+    local msg = vim.fn.json_encode({
+        command = "execute", code = code, cell_id = cell_id, filename = filename
+    })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
+function M.send_cell()
+    local src_win = vim.api.nvim_get_current_win()
+    UI.open_windows(src_win)
+    vim.api.nvim_set_current_win(src_win)
+    local s, e = Utils.get_cell_range()
+    UI.flash_range(s, e)
+    local lines = vim.api.nvim_buf_get_lines(0, s-1, e, false)
+    if #lines > 0 and lines[1]:match("^# %%%%") then table.remove(lines, 1) end
+    local id = Utils.get_current_cell_id(s)
+    local fn = vim.fn.expand("%:t")
+    if fn == "" then fn = "untitled" end
+    M.send_payload(table.concat(lines, "\n"), id, fn)
+end
+
+function M.send_selection()
+    local src_win = vim.api.nvim_get_current_win()
+    UI.open_windows(src_win)
+    vim.api.nvim_set_current_win(src_win)
+    local _, csrow, _, _ = unpack(vim.fn.getpos("'<"))
+    local _, cerow, _, _ = unpack(vim.fn.getpos("'>"))
+    local lines = vim.api.nvim_buf_get_lines(0, csrow - 1, cerow, false)
+    if #lines == 0 then return end
+    UI.flash_range(csrow, cerow)
+    local id = Utils.get_current_cell_id(csrow)
+    local fn = vim.fn.expand("%:t")
+    if fn == "" then fn = "untitled" end
+    M.send_payload(table.concat(lines, "\n"), id, fn)
+end
+
+function M.run_all_cells()
+    local src_win = vim.api.nvim_get_current_win()
+    UI.open_windows(src_win)
+    vim.api.nvim_set_current_win(src_win)
+    if not State.job_id then M.start_kernel() end
+    local fn = vim.fn.expand("%:t")
+    if fn == "" then fn = "untitled" end
+    local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+    local blk, bid, is_code = {}, "scratchpad", true
+    for i, line in ipairs(lines) do
+        if line:match("^# %%%%") then
+            if #blk > 0 and is_code then M.send_payload(table.concat(blk, "\n"), bid, fn) end
+            blk, bid = {}, Utils.ensure_cell_id(i, line)
+            is_code = not line:lower():match("^# %%%%+%s*%[markdown%]")
+        else
+            if is_code then table.insert(blk, line) end
+        end
+    end
+    if #blk > 0 and is_code then M.send_payload(table.concat(blk, "\n"), bid, fn) end
+end
+
+function M.view_dataframe(args)
+    if not State.job_id then return vim.notify("Kernel not started", vim.log.levels.WARN) end
+    local var_name = args.args
+    if var_name == "" then var_name = vim.fn.expand("<cword>") end
+    local msg = vim.fn.json_encode({ command = "view_dataframe", name = var_name })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
+function M.show_variables()
+    if not State.job_id then return vim.notify("Kernel not started", vim.log.levels.WARN) end
+    local msg = vim.fn.json_encode({ command = "get_variables" })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
+function M.check_cursor_cell()
+    if not State.job_id then return end
+    vim.schedule(function()
+        local cell_id = Utils.get_current_cell_id()
+        local filename = vim.fn.expand("%:t")
+        if filename == "" then filename = "scratchpad" end
+        local cache_dir = ".jukit_cache/" .. filename
+        local rel_path = cache_dir .. "/" .. cell_id .. ".md"
+        local md_path = vim.fn.fnamemodify(rel_path, ":p")
+        if State.current_preview_file ~= md_path and vim.fn.filereadable(md_path) == 1 then
+            UI.open_markdown_preview(md_path)
+        end
+    end)
+end
+
+return M
