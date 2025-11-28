@@ -28,7 +28,7 @@ except ImportError: dill = None
 try: import uniplot
 except ImportError: uniplot = None
 
-CACHE_ROOT = ".jukit_cache"
+CACHE_ROOT = ".jovian_cache"
 
 class StreamCapture:
     def __init__(self, stream_name, parent_kernel):
@@ -46,7 +46,7 @@ class StreamCapture:
         self.buffer.truncate(0)
         self.buffer.seek(0)
 
-class JukitKernel:
+class JovianKernel:
     def __init__(self):
         self.current_cell_id = "unknown"
         self.current_filename = "scratchpad"
@@ -419,5 +419,5 @@ class JukitKernel:
             except (json.JSONDecodeError, KeyboardInterrupt): pass
 
 if __name__ == "__main__":
-    kernel = JukitKernel()
+    kernel = JovianKernel()
     kernel.start()

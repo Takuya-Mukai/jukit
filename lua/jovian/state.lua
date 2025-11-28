@@ -7,9 +7,9 @@ M.buf = { output = nil, preview = nil }
 M.win = { output = nil, preview = nil }
 
 -- 名前空間 (Highlight Namespace)
-M.hl_ns = vim.api.nvim_create_namespace("JukitCellHighlight")
-M.status_ns = vim.api.nvim_create_namespace("JukitStatus")
-M.diag_ns = vim.api.nvim_create_namespace("JukitDiagnostics")
+M.hl_ns = vim.api.nvim_create_namespace("JovianCellHighlight")
+M.status_ns = vim.api.nvim_create_namespace("JovianStatus")
+M.diag_ns = vim.api.nvim_create_namespace("JovianDiagnostics")
 
 M.current_preview_file = nil
 

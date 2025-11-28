@@ -1,143 +1,142 @@
-# 🚀 Jukit.nvim
+# 🪐 Jovian.nvim
 
-**Jukit.nvim** is a blazing-fast, terminal-centric Jupyter Notebook alternative for Neovim.
+**Jovian.nvim** is a plugin that provides a Jupyter Notebook-like environment within Neovim.
 
-It transforms Neovim into a professional scientific development environment, leveraging the power of **IPython** for magic commands, **Neovim Diagnostics** for inline error reporting, and **TUI-based viewers** for DataFrames and variables.
+It uses the **IPython** kernel to execute code, allowing you to use magic commands, visualize data in the terminal, and view plots, all without leaving your editor. It is designed to be a lightweight, keyboard-centric alternative to browser-based notebooks.
 
-## ✨ Key Features
+## Features
 
-  * **⚡ IPython Kernel Integration:** Full support for magic commands (`!ls`, `%time`, `%cd`, `%whos`) and robust error handling.
-  * **📊 Interactive Data Viewer:** Inspect `pandas` DataFrames and `numpy` arrays in a scrollable, spreadsheet-like floating window (`:JukitView`).
-  * **🔎 Variable Explorer:** Visualize active variables, types, and shapes in a clean floating window (`:JukitVars`).
-  * **🚨 Inline Diagnostics:** Python errors are displayed directly in your code buffer with red underlines and virtual text messages.
-  * **📈 Plotting Support:**
-      * **Image Plot:** Automatically captures `matplotlib` plots and generates Markdown previews.
-      * **TUI Plot:** Render high-resolution Braille charts directly in the terminal (`:JukitPlotTUI`).
-  * **💾 Session Management:** Save and load your entire workspace (variables) using `dill` (`:JukitSaveSession`).
-  * **🔄 SSH Remote Execution:** Run your code on a remote GPU server seamlessly via SSH.
-  * **📋 Smart Clipboard:** Copy DataFrames/Arrays to your system clipboard as Markdown tables or CSV (`:JukitCopy`).
-  * **⏱️ Profiling:** Run `cProfile` on a cell and view execution statistics (`:JukitProfile`).
-  * **👀 Live Status:** Real-time execution status (`⏳ Running...`, `✓ Done`, `✘ Error`) displayed next to cell headers.
+- **IPython Kernel:** Supports standard magic commands (`!ls`, `%time`, `%cd`) and execution.
+- **Output Split:** Displays execution results (stdout/stderr) in a dedicated split window.
+- **Data Viewer:** View `pandas` DataFrames and `numpy` arrays in a floating window (`:JovianView`).
+- **Variable Explorer:** Displays a list of active variables, their types, and shapes (`:JovianVars`).
+- **Inline Diagnostics:** Python errors are highlighted in the code buffer using Neovim's diagnostic interface.
+- **Plotting:**
+  - **TUI:** Renders charts directly in the terminal using Braille characters (`:JovianPlotTUI`).
+  - **Image:** Saves `matplotlib` plots to disk and generates a Markdown preview.
+- **SSH Remote:** Supports executing code on a remote server via SSH.
+- **Session:** Saves/Loads the workspace variables using `dill` (`:JovianSaveSession`).
+- **Profiling:** Runs `cProfile` on a cell and displays the statistics (`:JovianProfile`).
 
-## 📦 Requirements
+## Requirements
 
-  * **Neovim** (v0.9.0+)
+- **Neovim** (v0.9.0 or later)
 
-  * **Python 3**
+- **Python 3**
 
-  * **Python Packages:**
+- **Python Packages:**
+  - **Required:** `ipython` (Required for the kernel).
+  - **Recommended:** `pandas`, `numpy`, `matplotlib`.
+  - **Optional:** `uniplot` (for terminal plotting), `dill` (for session saving).
 
-      * **Mandatory:** `ipython` (The kernel relies on `InteractiveShell`).
-      * **Recommended:** `pandas`, `numpy`, `matplotlib`.
-      * **Optional:** `uniplot` (for TUI plotting), `dill` (for session save/load).
+  <!-- end list -->
 
-    <!-- end list -->
+  ```bash
+  pip install ipython pandas numpy matplotlib uniplot dill
+  ```
 
-    ```bash
-    pip install ipython pandas numpy matplotlib uniplot dill
-    ```
+## Installation
 
-    *(Note: For NixOS/Debian, install these via your system package manager or use `pip --break-system-packages` if necessary.)*
-
-## 🛠️ Installation
-
-### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
+Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-    dir = "~/path/to/jukit", -- Point to your local path or git repo
+    "your-username/jovian.nvim", -- Or local path: dir = "~/path/to/jovian.nvim"
     ft = "python",
     config = function()
-        require("jukit").setup({
-            -- Python Settings
-            python_interpreter = "python3", 
-            
-            -- SSH Remote Settings (Optional)
-            -- ssh_host = "user@gpu-server", 
-            -- ssh_python = "/usr/bin/python3",
-
-            -- UI Settings
-            preview_width_percent = 40,
-            notify_threshold = 10, -- Notify if task takes > 10s
+        require("jovian").setup({
+            python_interpreter = "python3",
+            -- notify_threshold = 10, -- Notification if execution takes > 10s
         })
     end
 }
 ```
 
-## ⚙️ Configuration
+## Configuration
 
-The default configuration:
+Default settings:
 
 ```lua
-require("jukit").setup({
-    -- Layout
+require("jovian").setup({
+    -- UI
     preview_width_percent = 40,
     repl_height_percent = 30,
-    preview_image_ratio = 0.6,
-    repl_image_ratio = 0.3,
-    
-    -- Python & Remote
+
+    -- Python Environment
     python_interpreter = "python3",
-    ssh_host = nil,    -- Set "user@host" to run remotely
-    ssh_python = "python3",
-    
+
+    -- SSH Remote (Optional)
+    -- ssh_host = "user@hostname",
+    -- ssh_python = "/usr/bin/python3",
+
     -- Visuals
     flash_highlight_group = "Visual",
     flash_duration = 300,
-    
+
     -- Behavior
     notify_threshold = 10,
 })
 ```
 
-## ⌨️ Recommended Keybindings
+## Keybindings
 
-Jukit does not define keybindings by default. Add these to your `init.lua`:
+This plugin does not define any keybindings by default. It is recommended to add the following to your `init.lua`:
 
 ```lua
 local map = vim.keymap.set
 
--- 1. Window Management (REQUIRED to run code)
-map("n", "<leader>jo", "<cmd>JukitOpen<cr>", { desc = "Open Jukit Windows" })
-map("n", "<leader>jt", "<cmd>JukitToggle<cr>", { desc = "Toggle Jukit Windows" })
+-- Window Management
+map("n", "<leader>jo", "<cmd>JovianOpen<cr>", { desc = "Open Windows" })
+map("n", "<leader>jt", "<cmd>JovianToggle<cr>", { desc = "Toggle Windows" })
 
--- 2. Execution
-map("n", "<leader>r", "<cmd>JukitRun<cr>", { desc = "Run Current Cell" })
-map("n", "<leader>R", "<cmd>JukitRunAll<cr>", { desc = "Run All Cells" })
-map("n", "<leader>rp", "<cmd>JukitProfile<cr>", { desc = "Profile Cell" })
+-- Execution
+map("n", "<leader>r", "<cmd>JovianRun<cr>", { desc = "Run Cell" })
+map("n", "<leader>R", "<cmd>JovianRunAll<cr>", { desc = "Run All" })
+map("n", "<leader>rp", "<cmd>JovianProfile<cr>", { desc = "Profile Cell" })
 
--- 3. Data & Debugging
-map("n", "<leader>jv", "<cmd>JukitVars<cr>", { desc = "Variable Explorer" })
-map("n", "<leader>jd", "<cmd>JukitView<cr>", { desc = "View DataFrame" })
-map("n", "<leader>jp", "<cmd>JukitPlotTUI<cr>", { desc = "Plot TUI" })
-map("n", "<leader>ce", "<cmd>JukitClearDiag<cr>", { desc = "Clear Diagnostics" })
+-- Data & Tools
+map("n", "<leader>jv", "<cmd>JovianVars<cr>", { desc = "Variables" })
+map("n", "<leader>jd", "<cmd>JovianView<cr>", { desc = "Data Viewer" })
+map("n", "<leader>jp", "<cmd>JovianPlotTUI<cr>", { desc = "TUI Plot" })
+map("n", "<leader>ce", "<cmd>JovianClearDiag<cr>", { desc = "Clear Diagnostics" })
 
--- 4. Session
-map("n", "<leader>jss", "<cmd>JukitSaveSession<cr>", { desc = "Save Session" })
-map("n", "<leader>jsl", "<cmd>JukitLoadSession<cr>", { desc = "Load Session" })
+-- Session
+map("n", "<leader>ss", "<cmd>JovianSaveSession<cr>", { desc = "Save Session" })
+map("n", "<leader>sl", "<cmd>JovianLoadSession<cr>", { desc = "Load Session" })
 
--- 5. Navigation & Editing
-map("n", "]j", "<cmd>JukitNextCell<cr>", { desc = "Next Cell" })
-map("n", "[j", "<cmd>JukitPrevCell<cr>", { desc = "Prev Cell" })
-map("n", "<leader>cn", "<cmd>JukitNewCellBelow<cr>", { desc = "New Cell Below" })
+-- Kernel Control
+map("n", "<leader>kk", "<cmd>JovianRestart<cr>", { desc = "Restart Kernel" })
+map("n", "<leader>ki", "<cmd>JovianInterrupt<cr>", { desc = "Interrupt Kernel" })
 ```
 
-## 🚀 Commands Reference
+## Commands
 
-| Command | Description |
-| :--- | :--- |
-| `:JukitOpen` / `:JukitToggle` | **Must be run first.** Opens the Output/REPL split windows. |
-| `:JukitRun` | Execute the current cell (`# %%`). |
-| `:JukitView [var]` | Opens a TUI spreadsheet viewer for the variable (DataFrame/Array). |
-| `:JukitVars` | Shows a list of all active variables in the kernel. |
-| `:JukitPlotTUI [var]` | Plots a variable directly in the REPL using Braille characters. |
-| `:JukitCopy [var]` | Copies a DataFrame/Array to system clipboard as Markdown/CSV. |
-| `:JukitProfile` | Runs the current cell with `cProfile` and shows stats. |
-| `:JukitSaveSession [file]` | Saves current variables to a file (requires `dill`). |
-| `:JukitLoadSession [file]` | Loads variables from a file. |
-| `:JukitInterrupt` | Sends SIGINT to the kernel (stops execution). |
-| `:JukitRestart` | Restarts the IPython kernel (clears memory). |
+| Command                | Description                                                      |
+| :--------------------- | :--------------------------------------------------------------- |
+| `:JovianOpen`          | Opens the Output/REPL windows. **Must be run before execution.** |
+| `:JovianRun`           | Executes the current code cell.                                  |
+| `:JovianView [var]`    | Opens a spreadsheet viewer for a DataFrame/Array.                |
+| `:JovianVars`          | Displays a list of active variables.                             |
+| `:JovianPlotTUI [var]` | plots a list/array in the REPL using Braille characters.         |
+| `:JovianCopy [var]`    | Copies a DataFrame/Array to the clipboard as Markdown/CSV.       |
+| `:JovianSaveSession`   | Saves variables to a file (requires `dill`).                     |
+| `:JovianRestart`       | Restarts the kernel process.                                     |
+| `:JovianInterrupt`     | Sends SIGINT to stop the current execution.                      |
 
-## ⚠️ Known Issues
+## SSH Remote Execution
 
-  * **Window Focus on Toggle:** When running `:JukitToggle` or `:JukitOpen`, the cursor focus might occasionally remain in the newly opened REPL/Output window instead of returning to your code buffer, depending on your specific Neovim version or conflicting plugins. You may need to manually switch back (e.g., `<C-w>h`).
+To execute code on a remote server:
+
+1.  Set up password-less SSH (public key authentication).
+2.  Configure `ssh_host` in `setup()`:
+    ```lua
+    require("jovian").setup({
+        ssh_host = "user@192.168.1.50",
+        ssh_python = "/usr/bin/python3", -- Remote python path
+    })
+    ```
+3.  Jovian will automatically transfer the kernel script and tunnel the output back to Neovim.
+
+## Known Issues
+
+- **Focus on Toggle:** When running `:JovianToggle`, the cursor focus may occasionally remain in the REPL window instead of returning to the code buffer.

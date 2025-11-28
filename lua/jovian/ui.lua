@@ -1,12 +1,12 @@
 local M = {}
-local Config = require("jukit.config")
-local State = require("jukit.state")
+local Config = require("jovian.config")
+local State = require("jovian.state")
 
 function M.send_notification(msg)
     if vim.fn.executable("notify-send") == 1 then
-        vim.fn.jobstart({"notify-send", "Jukit Task Finished", msg}, {detach=true})
+        vim.fn.jobstart({"notify-send", "Jovian Task Finished", msg}, {detach=true})
     elseif vim.fn.executable("osascript") == 1 then
-        vim.fn.jobstart({"osascript", "-e", 'display notification "'..msg..'" with title "Jukit"'}, {detach=true})
+        vim.fn.jobstart({"osascript", "-e", 'display notification "'..msg..'" with title "Jovian"'}, {detach=true})
     else
         vim.notify(msg, vim.log.levels.INFO)
     end
@@ -26,7 +26,7 @@ function M.get_or_create_buf(name)
     return buf
 end
 
--- lua/jukit/ui.lua
+-- lua/jovian/ui.lua
 
 -- ... (前略)
 
@@ -151,10 +151,10 @@ function M.open_windows(target_win)
         vim.cmd("split")
         vim.cmd("wincmd j")
         State.win.output = vim.api.nvim_get_current_win()
-        State.buf.output = M.get_or_create_buf("JukitConsole")
+        State.buf.output = M.get_or_create_buf("JovianConsole")
         
         if vim.api.nvim_buf_line_count(State.buf.output) <= 1 then
-             M.append_to_repl("[Jukit Console Ready]", "Special")
+             M.append_to_repl("[Jovian Console Ready]", "Special")
         end
         
         vim.api.nvim_win_set_buf(State.win.output, State.buf.output)
@@ -503,7 +503,7 @@ function M.show_inspection(data)
 
     local win = vim.api.nvim_open_win(buf, true, {
         relative = "editor", width = width, height = height, row = row, col = col,
-        style = "minimal", border = "rounded", title = " Jukit Doc ", title_pos = "center"
+        style = "minimal", border = "rounded", title = " Jovian Doc ", title_pos = "center"
     })
     
     local opts = { noremap = true, silent = true }
@@ -521,9 +521,9 @@ function M.clear_repl()
         
         -- 再描画（ウィンドウが開いていれば）
         if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
-            State.buf.output = M.get_or_create_buf("JukitConsole")
+            State.buf.output = M.get_or_create_buf("JovianConsole")
             vim.api.nvim_win_set_buf(State.win.output, State.buf.output)
-            M.append_to_repl("[Jukit Console Cleared]", "Comment")
+            M.append_to_repl("[Jovian Console Cleared]", "Comment")
         end
     end
 end
@@ -533,7 +533,7 @@ function M.clear_diagnostics()
     local bufnr = vim.api.nvim_get_current_buf()
     vim.diagnostic.reset(State.diag_ns, bufnr)
     vim.api.nvim_buf_clear_namespace(bufnr, State.diag_ns, 0, -1)
-    vim.notify("Jukit diagnostics cleared", vim.log.levels.INFO)
+    vim.notify("Jovian diagnostics cleared", vim.log.levels.INFO)
 end
 
 return M

@@ -1,8 +1,8 @@
 local M = {}
-local Config = require("jukit.config")
-local Core = require("jukit.core")
-local UI = require("jukit.ui")
-local Utils = require("jukit.utils")
+local Config = require("jovian.config")
+local Core = require("jovian.core")
+local UI = require("jovian.ui")
+local Utils = require("jovian.utils")
 
 -- Navigation helpers... (No changes needed here, keeping it brief)
 local function goto_next_cell()
@@ -71,31 +71,31 @@ function M.setup(opts)
     Config.setup(opts)
     
     -- Execution
-    vim.api.nvim_create_user_command("JukitStart", Core.start_kernel, {})
-    vim.api.nvim_create_user_command("JukitRun", Core.send_cell, {})
-    vim.api.nvim_create_user_command("JukitSendSelection", Core.send_selection, { range = true })
-    vim.api.nvim_create_user_command("JukitRunAll", Core.run_all_cells, {})
-    vim.api.nvim_create_user_command("JukitRestart", Core.restart_kernel, {})
+    vim.api.nvim_create_user_command("JovianStart", Core.start_kernel, {})
+    vim.api.nvim_create_user_command("JovianRun", Core.send_cell, {})
+    vim.api.nvim_create_user_command("JovianSendSelection", Core.send_selection, { range = true })
+    vim.api.nvim_create_user_command("JovianRunAll", Core.run_all_cells, {})
+    vim.api.nvim_create_user_command("JovianRestart", Core.restart_kernel, {})
     
     -- UI
-    vim.api.nvim_create_user_command("JukitOpen", function() UI.open_windows() end, {})
-    vim.api.nvim_create_user_command("JukitToggle", UI.toggle_windows, {})
-    vim.api.nvim_create_user_command("JukitClear", UI.clear_repl, {})
-    vim.api.nvim_create_user_command("JukitClean", Core.clean_stale_cache, {})
-    vim.api.nvim_create_user_command("JukitClearDiag", UI.clear_diagnostics, {})
+    vim.api.nvim_create_user_command("JovianOpen", function() UI.open_windows() end, {})
+    vim.api.nvim_create_user_command("JovianToggle", UI.toggle_windows, {})
+    vim.api.nvim_create_user_command("JovianClear", UI.clear_repl, {})
+    vim.api.nvim_create_user_command("JovianClean", Core.clean_stale_cache, {})
+    vim.api.nvim_create_user_command("JovianClearDiag", UI.clear_diagnostics, {})
 
     -- Data & Tools
-    vim.api.nvim_create_user_command("JukitVars", Core.show_variables, {})
-    vim.api.nvim_create_user_command("JukitView", Core.view_dataframe, { nargs = "?" })
-    vim.api.nvim_create_user_command("JukitCopy", Core.copy_variable, { nargs = "?" }) -- ★追加
-    vim.api.nvim_create_user_command("JukitProfile", Core.run_profile_cell, {})      -- ★追加
+    vim.api.nvim_create_user_command("JovianVars", Core.show_variables, {})
+    vim.api.nvim_create_user_command("JovianView", Core.view_dataframe, { nargs = "?" })
+    vim.api.nvim_create_user_command("JovianCopy", Core.copy_variable, { nargs = "?" }) -- ★追加
+    vim.api.nvim_create_user_command("JovianProfile", Core.run_profile_cell, {})      -- ★追加
 
     -- Navigation
-    vim.api.nvim_create_user_command("JukitNextCell", goto_next_cell, {})
-    vim.api.nvim_create_user_command("JukitPrevCell", goto_prev_cell, {})
-    vim.api.nvim_create_user_command("JukitNewCellBelow", insert_cell_below, {})
-    vim.api.nvim_create_user_command("JukitNewCellAbove", insert_cell_above, {})
-    vim.api.nvim_create_user_command("JukitMergeBelow", merge_cell_below, {})
+    vim.api.nvim_create_user_command("JovianNextCell", goto_next_cell, {})
+    vim.api.nvim_create_user_command("JovianPrevCell", goto_prev_cell, {})
+    vim.api.nvim_create_user_command("JovianNewCellBelow", insert_cell_below, {})
+    vim.api.nvim_create_user_command("JovianNewCellAbove", insert_cell_above, {})
+    vim.api.nvim_create_user_command("JovianMergeBelow", merge_cell_below, {})
     
     -- Fold
     vim.opt.foldmethod = "expr"
@@ -103,16 +103,16 @@ function M.setup(opts)
     vim.opt.foldlevel = 99
 
     --kernel Control
-    vim.api.nvim_create_user_command("JukitInterrupt", Core.interrupt_kernel, {}) -- ★重要
+    vim.api.nvim_create_user_command("JovianInterrupt", Core.interrupt_kernel, {}) -- ★重要
     
     -- Session
-    vim.api.nvim_create_user_command("JukitSaveSession", Core.save_session, { nargs = "?" })
-    vim.api.nvim_create_user_command("JukitLoadSession", Core.load_session, { nargs = "?" })
+    vim.api.nvim_create_user_command("JovianSaveSession", Core.save_session, { nargs = "?" })
+    vim.api.nvim_create_user_command("JovianLoadSession", Core.load_session, { nargs = "?" })
     
     -- Plotting
-    vim.api.nvim_create_user_command("JukitPlotTUI", Core.plot_tui, { nargs = "?" })
+    vim.api.nvim_create_user_command("JovianPlotTUI", Core.plot_tui, { nargs = "?" })
 
-    vim.api.nvim_create_user_command("JukitDoc", Core.inspect_object, { nargs = "?" })
+    vim.api.nvim_create_user_command("JovianDoc", Core.inspect_object, { nargs = "?" })
 
     vim.api.nvim_create_autocmd({"CursorHold", "CursorHoldI"}, {
         pattern = "*",

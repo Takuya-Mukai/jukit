@@ -1,8 +1,8 @@
 local M = {}
-local State = require("jukit.state")
-local Config = require("jukit.config")
-local UI = require("jukit.ui")
-local Utils = require("jukit.utils")
+local State = require("jovian.state")
+local Config = require("jovian.config")
+local UI = require("jovian.ui")
+local Utils = require("jovian.utils")
 
 local function is_window_open()
     return State.win.output and vim.api.nvim_win_is_valid(State.win.output)
@@ -38,7 +38,7 @@ local function on_stdout(chan_id, data, name)
                                 local target_line = (start_line - 1) + (msg.error.line - 1)
                                 vim.diagnostic.set(State.diag_ns, target_buf, {{
                                     lnum = target_line, col = 0, message = msg.error.msg,
-                                    severity = vim.diagnostic.severity.ERROR, source = "Jukit",
+                                    severity = vim.diagnostic.severity.ERROR, source = "Jovian",
                                 }})
                             else
                                 UI.set_cell_status(target_buf, msg.cell_id, "done", " Done")
@@ -97,7 +97,7 @@ end
 function M.start_kernel()
     if State.job_id then return end
     
-    local script_path = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jukit/kernel.py"
+    local script_path = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jovian/kernel.py"
     local cmd = {}
 
     -- ★ 追加: SSH対応
@@ -108,11 +108,11 @@ function M.start_kernel()
         -- ローカルの kernel.py をリモートに転送して実行する強力なワンライナー
         -- 1. scpで転送
         -- 2. sshで実行
-        local scp_cmd = string.format("scp %s %s:/tmp/jukit_kernel.py", script_path, host)
+        local scp_cmd = string.format("scp %s %s:/tmp/jovian_kernel.py", script_path, host)
         vim.fn.system(scp_cmd) -- 同期実行で確実にファイルを送る
         
-        cmd = {"ssh", host, remote_python, "-u", "/tmp/jukit_kernel.py"}
-        UI.append_to_repl("[Jukit] Connecting to remote: " .. host, "Special")
+        cmd = {"ssh", host, remote_python, "-u", "/tmp/jovian_kernel.py"}
+        UI.append_to_repl("[Jovian] Connecting to remote: " .. host, "Special")
     else
         -- ローカル実行
         cmd = vim.split(Config.options.python_interpreter, " ")
@@ -123,7 +123,7 @@ function M.start_kernel()
         on_stdout = on_stdout, on_stderr = on_stdout, stdout_buffered = false,
         on_exit = function() State.job_id = nil end
     })
-    UI.append_to_repl("[Jukit Kernel Started]")
+    UI.append_to_repl("[Jovian Kernel Started]")
     vim.defer_fn(function() M.clean_stale_cache() end, 500)
 end
 
@@ -185,7 +185,7 @@ function M.copy_variable(args)
 end
 
 function M.send_cell()
-    if not is_window_open() then return vim.notify("Jukit windows are closed. Use :JukitOpen or :JukitToggle first.", vim.log.levels.WARN) end
+    if not is_window_open() then return vim.notify("Jovian windows are closed. Use :JovianOpen or :JovianToggle first.", vim.log.levels.WARN) end
     local src_win = vim.api.nvim_get_current_win()
     vim.api.nvim_set_current_win(src_win)
     local s, e = Utils.get_cell_range()
@@ -200,7 +200,7 @@ end
 
 -- ★ 追加: 現在のセルをプロファイル
 function M.run_profile_cell()
-    if not is_window_open() then return vim.notify("Jukit windows are closed.", vim.log.levels.WARN) end
+    if not is_window_open() then return vim.notify("Jovian windows are closed.", vim.log.levels.WARN) end
     local src_win = vim.api.nvim_get_current_win()
     local s, e = Utils.get_cell_range()
     local lines = vim.api.nvim_buf_get_lines(0, s-1, e, false)
@@ -210,7 +210,7 @@ function M.run_profile_cell()
 end
 
 function M.send_selection()
-    if not is_window_open() then return vim.notify("Jukit windows are closed.", vim.log.levels.WARN) end
+    if not is_window_open() then return vim.notify("Jovian windows are closed.", vim.log.levels.WARN) end
     local src_win = vim.api.nvim_get_current_win()
     vim.api.nvim_set_current_win(src_win)
     local _, csrow, _, _ = unpack(vim.fn.getpos("'<"))
@@ -225,7 +225,7 @@ function M.send_selection()
 end
 
 function M.run_all_cells()
-    if not is_window_open() then return vim.notify("Jukit windows are closed.", vim.log.levels.WARN) end
+    if not is_window_open() then return vim.notify("Jovian windows are closed.", vim.log.levels.WARN) end
     local src_win = vim.api.nvim_get_current_win()
     vim.api.nvim_set_current_win(src_win)
     if not State.job_id then M.start_kernel() end
@@ -265,7 +265,7 @@ function M.check_cursor_cell()
         local cell_id = Utils.get_current_cell_id()
         local filename = vim.fn.expand("%:t")
         if filename == "" then filename = "scratchpad" end
-        local cache_dir = ".jukit_cache/" .. filename
+        local cache_dir = ".jovian_cache/" .. filename
         local rel_path = cache_dir .. "/" .. cell_id .. ".md"
         local md_path = vim.fn.fnamemodify(rel_path, ":p")
         if State.current_preview_file ~= md_path and vim.fn.filereadable(md_path) == 1 then
@@ -298,7 +298,7 @@ end
 function M.save_session(args)
     if not State.job_id then return end
     local filename = args.args
-    if filename == "" then filename = "jukit_session.pkl" end -- デフォルト名
+    if filename == "" then filename = "jovian_session.pkl" end -- デフォルト名
     
     local msg = vim.fn.json_encode({ command = "save_session", filename = filename })
     vim.fn.chansend(State.job_id, msg .. "\n")
@@ -308,7 +308,7 @@ end
 function M.load_session(args)
     if not State.job_id then M.start_kernel() end
     local filename = args.args
-    if filename == "" then filename = "jukit_session.pkl" end
+    if filename == "" then filename = "jovian_session.pkl" end
     
     local msg = vim.fn.json_encode({ command = "load_session", filename = filename })
     vim.fn.chansend(State.job_id, msg .. "\n")
