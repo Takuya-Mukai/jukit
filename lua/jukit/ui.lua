@@ -2,7 +2,6 @@ local M = {}
 local Config = require("jukit.config")
 local State = require("jukit.state")
 
--- === 通知 ===
 function M.send_notification(msg)
     if vim.fn.executable("notify-send") == 1 then
         vim.fn.jobstart({"notify-send", "Jukit Task Finished", msg}, {detach=true})
@@ -13,59 +12,95 @@ function M.send_notification(msg)
     end
 end
 
--- === バッファ・ウィンドウ管理 ===
 function M.get_or_create_buf(name)
     local existing = vim.fn.bufnr(name)
     if existing ~= -1 and vim.api.nvim_buf_is_valid(existing) then return existing end
+    
     local buf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_name(buf, name)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
+    
+    -- ここでターミナルモードとして開き、チャンネルIDを保存
+    State.term_chan = vim.api.nvim_open_term(buf, {})
+    
     return buf
 end
 
+-- lua/jukit/ui.lua
+
+-- ... (前略)
+
 function M.append_to_repl(text, hl_group)
-    if not (State.buf.output and vim.api.nvim_buf_is_valid(State.buf.output)) then return end
+    if not State.term_chan then return end
+    
     local lines = type(text) == "table" and text or vim.split(text, "\n")
-    vim.api.nvim_buf_set_lines(State.buf.output, -1, -1, false, lines)
-    local last_line = vim.api.nvim_buf_line_count(State.buf.output)
-    if hl_group then
-        for i = 0, #lines - 1 do
-            vim.api.nvim_buf_add_highlight(State.buf.output, -1, hl_group, last_line - #lines + i, 0, -1)
-        end
+    local output = ""
+    
+    -- ANSI カラーコード定義
+    local RESET = "\x1b[0m"
+    local BOLD  = "\x1b[1m"
+    local GREEN = "\x1b[32m"
+    local BLUE  = "\x1b[34m"
+    local CYAN  = "\x1b[36m"
+    local YELLOW = "\x1b[33m"
+    local GREY  = "\x1b[90m"
+    
+    local color_start = ""
+    local color_end = RESET
+    
+    if hl_group == "Type" then
+        -- プロンプト (In [abc]:) -> 緑 & 太字
+        color_start = GREEN .. BOLD
+        
+        -- ★ 工夫: プロンプトの前に、うっすらと区切り線を入れる
+        -- これで前の実行結果との境目がはっきりする
+        output = output .. GREY .. string.rep("─", 40) .. RESET .. "\r\n"
+        
+    elseif hl_group == nil then
+        -- コード本文 (hl_groupなし) -> シアン (これで見分けがつく！)
+        color_start = CYAN
+        
+    elseif hl_group == "Special" then
+        -- 画像保存通知など -> 青
+        color_start = BLUE
+    elseif hl_group == "WarningMsg" then
+        -- 警告 -> 黄色
+        color_start = YELLOW
+    elseif hl_group == "Comment" then
+        -- 完了通知など -> グレー
+        color_start = GREY
     end
+
+    for _, line in ipairs(lines) do
+        output = output .. color_start .. line .. color_end .. "\r\n"
+    end
+    
+    -- ターミナルに送信
+    vim.api.nvim_chan_send(State.term_chan, output)
+    
+    -- オートスクロール
     if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
-        vim.api.nvim_win_set_cursor(State.win.output, {last_line, 0})
+        local buf = State.buf.output
+        local count = vim.api.nvim_buf_line_count(buf)
+        vim.api.nvim_win_set_cursor(State.win.output, {count, 0})
     end
 end
 
+-- ★ 修正: ストリーム出力 (超シンプルになる)
 function M.append_stream_text(text)
-    if not (State.buf.output and vim.api.nvim_buf_is_valid(State.buf.output)) then return end
-    local buf = State.buf.output
+    if not State.term_chan then return end
     
-    if text:find("\r") then
-        -- \r (行頭に戻る) が含まれている場合
-        local parts = vim.split(text, "\r")
-        local last_part = parts[#parts] -- 最後の更新分だけを採用
-        
-        -- ★修正: last_part の中に \n が混ざっている可能性があるので、さらに分解する
-        local lines = vim.split(last_part, "\n")
-        
-        -- 末尾が空文字なら削除（余計な空行を防ぐ）
-        if lines[#lines] == "" and #lines > 1 then 
-            table.remove(lines, #lines) 
-        end
-        
-        local count = vim.api.nvim_buf_line_count(buf)
-        -- 現在の最終行を、新しい内容（複数行かもしれない）で置き換える
-        vim.api.nvim_buf_set_lines(buf, count - 1, count, false, lines)
-    else
-        -- 通常の出力
-        local lines = vim.split(text, "\n")
-        if lines[#lines] == "" and #lines > 1 then table.remove(lines, #lines) end
-        vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
-    end
+    -- \r や \n の処理は nvim_open_term が勝手にやってくれるので、
+    -- そのまま流し込むだけでいい！
+    
+    -- ただし、Unixの改行(\n)をターミナル用の改行(\r\n)に変換しておくと表示が崩れにくい
+    -- (IPythonはすでに \r\n を送ってくることが多いが念のため)
+    local clean_text = text:gsub("\n", "\r\n")
+    
+    vim.api.nvim_chan_send(State.term_chan, clean_text)
     
     if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
+        local buf = State.buf.output
         local count = vim.api.nvim_buf_line_count(buf)
         vim.api.nvim_win_set_cursor(State.win.output, {count, 0})
     end
@@ -82,7 +117,11 @@ function M.flash_range(start_line, end_line)
 end
 
 function M.open_windows(target_win)
+    -- 引数がなければ「現在」を取得するが、
+    -- toggle_windows から呼ばれた場合は target_win が必ず入るようにする
     local return_to = target_win or vim.api.nvim_get_current_win()
+
+    -- Preview Window
     if not (State.win.preview and vim.api.nvim_win_is_valid(State.win.preview)) then
         vim.cmd("vsplit")
         vim.cmd("wincmd L")
@@ -91,25 +130,58 @@ function M.open_windows(target_win)
         vim.api.nvim_win_set_width(State.win.preview, width)
         local pbuf = vim.api.nvim_create_buf(false, true)
         vim.api.nvim_win_set_buf(State.win.preview, pbuf)
+        
+        -- 見た目設定
+        local win = State.win.preview
+        vim.wo[win].number = false
+        vim.wo[win].relativenumber = false
+        vim.wo[win].signcolumn = "no"
+        vim.wo[win].foldcolumn = "0"
+        vim.wo[win].fillchars = "eob: "
     end
+
+    -- REPL Window
     if not (State.win.output and vim.api.nvim_win_is_valid(State.win.output)) then
-        if vim.api.nvim_win_is_valid(return_to) then vim.api.nvim_set_current_win(return_to) end
+        -- 分割前に、一度「戻り先（コード）」にフォーカスを戻す
+        -- これをしないと、Previewウィンドウから分割されてしまうことがある
+        if vim.api.nvim_win_is_valid(return_to) then 
+            vim.api.nvim_set_current_win(return_to) 
+        end
+        
         vim.cmd("split")
         vim.cmd("wincmd j")
         State.win.output = vim.api.nvim_get_current_win()
         State.buf.output = M.get_or_create_buf("JukitConsole")
+        
         if vim.api.nvim_buf_line_count(State.buf.output) <= 1 then
-            vim.api.nvim_buf_set_lines(State.buf.output, 0, -1, false, {"[Jukit Console Ready]"})
+             M.append_to_repl("[Jukit Console Ready]", "Special")
         end
+        
         vim.api.nvim_win_set_buf(State.win.output, State.buf.output)
         local height = math.floor(vim.o.lines * (Config.options.repl_height_percent / 100))
         vim.api.nvim_win_set_height(State.win.output, height)
+        
+        -- 見た目設定
+        local win = State.win.output
+        vim.wo[win].number = false
+        vim.wo[win].relativenumber = false
+        vim.wo[win].signcolumn = "no"
+        vim.wo[win].scrolloff = 0
+        vim.wo[win].fillchars = "eob: "
     end
-    vim.schedule(function()
+
+    -- ★ 修正: 同期的に一度戻り、念のため schedule でも戻る「二段構え」にする
+    if return_to and vim.api.nvim_win_is_valid(return_to) then
+        vim.api.nvim_set_current_win(return_to)
+    end
+    
+    vim.defer_fn(function()
         if return_to and vim.api.nvim_win_is_valid(return_to) then
             vim.api.nvim_set_current_win(return_to)
+            -- 万が一ターミナルモードに入ってしまっていた場合のために stopinsert も念のため呼ぶ
+            vim.cmd("stopinsert")
         end
-    end)
+    end, 50)
 end
 
 function M.close_windows()
@@ -120,11 +192,21 @@ function M.close_windows()
 end
 
 function M.toggle_windows()
+    -- ★ 修正: 実行前のウィンドウID（コードのウィンドウ）を確実に捕まえる
+    local cur_win = vim.api.nvim_get_current_win()
+
     if (State.win.preview and vim.api.nvim_win_is_valid(State.win.preview)) or 
        (State.win.output and vim.api.nvim_win_is_valid(State.win.output)) then
+        -- 閉じる場合
         M.close_windows()
+        
+        -- 閉じた後、もし元のウィンドウが生きていればそこに戻る
+        if vim.api.nvim_win_is_valid(cur_win) then
+            vim.api.nvim_set_current_win(cur_win)
+        end
     else
-        M.open_windows()
+        -- 開く場合: 捕まえた cur_win を「戻り先」として渡す
+        M.open_windows(cur_win)
     end
 end
 
@@ -168,22 +250,140 @@ end
 function M.show_variables(vars)
     local buf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
-    local lines = { "VARIABLE             TYPE             VALUE/INFO", "------------------------------------------------------------" }
-    for _, v in ipairs(vars) do
-        local name = v.name .. string.rep(" ", 20 - #v.name)
-        local type_name = v.type .. string.rep(" ", 16 - #v.type)
-        table.insert(lines, name .. type_name .. v.info)
+
+    local SEPARATOR = " │ " 
+    local PADDING = 1
+    
+    -- ★ 追加: 変数が空の場合のガード処理
+    if #vars == 0 then
+        local lines = {
+            "Variable List",
+            "--------------------------------",
+            " (No variables defined yet) ",
+            "",
+            " Run some code to define variables."
+        }
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+        vim.api.nvim_buf_add_highlight(buf, -1, "Title", 0, 0, -1)
+        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 2, 0, -1)
+        
+        -- 小さなウィンドウを出す
+        local width = 40
+        local height = 6
+        local row = math.floor((vim.o.lines - height) / 2)
+        local col = math.floor((vim.o.columns - width) / 2)
+        local win = vim.api.nvim_open_win(buf, true, {
+            relative = "editor", width = width, height = height, row = row, col = col,
+            style = "minimal", border = "rounded", title = " Variables ", title_pos = "center"
+        })
+        -- 閉じる設定
+        local opts = { noremap = true, silent = true }
+        vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)
+        vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", ":close<CR>", opts)
+        return
     end
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+    -- === 以下、変数が1つ以上ある場合の通常処理 (前回と同じ) ===
+    
+    -- 1. 列幅の計算
+    local max_name_w = 4 -- "NAME" の長さ
+    local max_type_w = 4 -- "TYPE" の長さ
+    
+    for _, v in ipairs(vars) do
+        max_name_w = math.max(max_name_w, vim.fn.strdisplaywidth(v.name))
+        max_type_w = math.max(max_type_w, vim.fn.strdisplaywidth(v.type))
+    end
+
+    -- パディング関数
+    local function pad_str(s, w) 
+        local vis_w = vim.fn.strdisplaywidth(s)
+        return string.rep(" ", PADDING) .. s .. string.rep(" ", w - vis_w + PADDING)
+    end
+
+    local fmt_lines = {}
+    
+    -- ヘッダー作成
+    local header = pad_str("NAME", max_name_w) .. SEPARATOR ..
+                   pad_str("TYPE", max_type_w) .. SEPARATOR ..
+                   pad_str("VALUE/INFO", 10)
+    
+    table.insert(fmt_lines, header)
+    
+    -- 区切り線作成
+    local sep_len_name = max_name_w + (PADDING * 2)
+    local sep_len_type = max_type_w + (PADDING * 2)
+    local sep_line = string.rep("─", sep_len_name) .. "─┼─" ..
+                     string.rep("─", sep_len_type) .. "─┼─" ..
+                     string.rep("─", 100) 
+    
+    table.insert(fmt_lines, sep_line)
+
+    -- データ行作成
+    for _, v in ipairs(vars) do
+        local line = pad_str(v.name, max_name_w) .. SEPARATOR ..
+                     pad_str(v.type, max_type_w) .. SEPARATOR ..
+                     " " .. v.info 
+        table.insert(fmt_lines, line)
+    end
+
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, fmt_lines)
+
+    -- ハイライト
     vim.api.nvim_buf_add_highlight(buf, -1, "Title", 0, 0, -1)
     vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 1, 0, -1)
-    local width = math.floor(vim.o.columns * 0.6)
-    local height = math.floor(vim.o.lines * 0.6)
+    
+    local col1_end = sep_len_name
+    local col2_end = col1_end + 3 + sep_len_type
+    
+    for i = 2, #fmt_lines - 1 do
+        vim.api.nvim_buf_add_highlight(buf, -1, "Function", i, 0, col1_end)
+        vim.api.nvim_buf_add_highlight(buf, -1, "Type", i, col1_end + 3, col2_end)
+        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col1_end, col1_end + 3)
+        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col2_end, col2_end + 3)
+    end
+
+    -- ウィンドウ設定
+    local editor_width = vim.o.columns
+    local content_width = 0
+    for _, line in ipairs(fmt_lines) do
+        content_width = math.max(content_width, vim.fn.strdisplaywidth(line))
+    end
+    
+    local width = math.min(content_width + 4, math.floor(editor_width * 0.9))
+    local height = math.min(#fmt_lines + 2, math.floor(vim.o.lines * 0.8))
+    
     local row = math.floor((vim.o.lines - height) / 2)
     local col = math.floor((vim.o.columns - width) / 2)
+
     local win = vim.api.nvim_open_win(buf, true, {
         relative = "editor", width = width, height = height, row = row, col = col,
         style = "minimal", border = "rounded", title = " Variables ", title_pos = "center"
+    })
+    
+    vim.wo[win].wrap = false
+    vim.wo[win].cursorline = true
+    
+    local opts = { noremap = true, silent = true }
+    vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)
+    vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", ":close<CR>", opts)
+end
+
+-- ★ 追加: プロファイリング結果表示
+function M.show_profile_stats(text)
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
+    
+    local lines = vim.split(text, "\n")
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    
+    local width = math.floor(vim.o.columns * 0.8)
+    local height = math.floor(vim.o.lines * 0.8)
+    local row = math.floor((vim.o.lines - height) / 2)
+    local col = math.floor((vim.o.columns - width) / 2)
+    
+    local win = vim.api.nvim_open_win(buf, true, {
+        relative = "editor", width = width, height = height, row = row, col = col,
+        style = "minimal", border = "rounded", title = " cProfile Stats ", title_pos = "center"
     })
     local opts = { noremap = true, silent = true }
     vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)
@@ -270,21 +470,69 @@ function M.show_dataframe(data)
     vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", ":close<CR>", opts)
 end
 
+function M.show_inspection(data)
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
+    vim.api.nvim_buf_set_option(buf, 'filetype', 'python') -- シンタックスハイライト用
+
+    local lines = {}
+    table.insert(lines, "# " .. data.name .. " (" .. data.type .. ")")
+    table.insert(lines, "")
+    
+    if data.definition and data.definition ~= "" then
+        table.insert(lines, "## Definition:")
+        table.insert(lines, data.definition)
+        table.insert(lines, "")
+    end
+    
+    if data.docstring then
+        table.insert(lines, "## Docstring:")
+        -- docstringを行に分解して追加
+        for _, l in ipairs(vim.split(data.docstring, "\n")) do
+            table.insert(lines, l)
+        end
+    end
+
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+    -- 大きめのウィンドウ
+    local width = math.floor(vim.o.columns * 0.8)
+    local height = math.floor(vim.o.lines * 0.8)
+    local row = math.floor((vim.o.lines - height) / 2)
+    local col = math.floor((vim.o.columns - width) / 2)
+
+    local win = vim.api.nvim_open_win(buf, true, {
+        relative = "editor", width = width, height = height, row = row, col = col,
+        style = "minimal", border = "rounded", title = " Jukit Doc ", title_pos = "center"
+    })
+    
+    local opts = { noremap = true, silent = true }
+    vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)
+    vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", ":close<CR>", opts)
+end
+
 function M.clear_repl()
     if State.buf.output and vim.api.nvim_buf_is_valid(State.buf.output) then
-        vim.api.nvim_buf_set_lines(State.buf.output, 0, -1, false, {"[Jukit Console Cleared]"})
+        -- ターミナルバッファは set_lines で消せないので、
+        -- 強引だがバッファを再作成する
+        vim.api.nvim_buf_delete(State.buf.output, { force = true })
+        State.buf.output = nil
+        State.term_chan = nil
+        
+        -- 再描画（ウィンドウが開いていれば）
+        if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
+            State.buf.output = M.get_or_create_buf("JukitConsole")
+            vim.api.nvim_win_set_buf(State.win.output, State.buf.output)
+            M.append_to_repl("[Jukit Console Cleared]", "Comment")
+        end
     end
 end
 
+-- ★ 追加: 診断クリア
 function M.clear_diagnostics()
     local bufnr = vim.api.nvim_get_current_buf()
-    
-    -- 診断情報をリセット
     vim.diagnostic.reset(State.diag_ns, bufnr)
-    
-    -- 名前空間も念のためクリア（Virtual Textなどを消す）
     vim.api.nvim_buf_clear_namespace(bufnr, State.diag_ns, 0, -1)
-    
     vim.notify("Jukit diagnostics cleared", vim.log.levels.INFO)
 end
 

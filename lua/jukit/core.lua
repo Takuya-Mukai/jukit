@@ -4,9 +4,7 @@ local Config = require("jukit.config")
 local UI = require("jukit.ui")
 local Utils = require("jukit.utils")
 
--- ★ 追加: ウィンドウが開いているかチェックするヘルパー
 local function is_window_open()
-    -- Outputウィンドウ（REPL）が開いていればOKとみなす
     return State.win.output and vim.api.nvim_win_is_valid(State.win.output)
 end
 
@@ -32,9 +30,6 @@ local function on_stdout(chan_id, data, name)
                             if start_t and (os.time() - start_t) >= Config.options.notify_threshold then
                                 UI.send_notification("Calculation " .. msg.cell_id .. " Finished!")
                             end
-
-                            -- 実行開始時にリセットしているので、ここはクリアせず追加のみ
-                            -- vim.diagnostic.reset(State.diag_ns, target_buf) -- 削除
                             vim.api.nvim_buf_clear_namespace(target_buf, State.diag_ns, 0, -1)
                             
                             if msg.error then
@@ -46,7 +41,7 @@ local function on_stdout(chan_id, data, name)
                                     severity = vim.diagnostic.severity.ERROR, source = "Jukit",
                                 }})
                             else
-                                UI.set_cell_status(target_buf, msg.cell_id, "done", "✓ Done")
+                                UI.set_cell_status(target_buf, msg.cell_id, "done", " Done")
                             end
                         end
                         State.cell_buf_map[msg.cell_id] = nil
@@ -57,6 +52,15 @@ local function on_stdout(chan_id, data, name)
                         UI.show_variables(msg.variables)
                     elseif msg.type == "dataframe_data" then
                         UI.show_dataframe(msg)
+                    -- ★ 追加: プロファイル結果
+                    elseif msg.type == "profile_stats" then
+                        UI.show_profile_stats(msg.text)
+                    -- ★ 追加: クリップボード
+		    elseif msg.type == "inspection_data" then
+                        UI.show_inspection(msg.data)
+                    elseif msg.type == "clipboard_data" then
+                        vim.fn.setreg("+", msg.content)
+                        vim.notify("Copied to system clipboard!", vim.log.levels.INFO)
                     elseif msg.type == "input_request" then
                         UI.append_to_repl("[Input Requested]: " .. msg.prompt, "Special")
                         vim.ui.input({ prompt = msg.prompt }, function(input)
@@ -92,9 +96,29 @@ end
 
 function M.start_kernel()
     if State.job_id then return end
-    local script = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jukit/kernel.py"
-    local cmd = vim.split(Config.options.python_interpreter, " ")
-    table.insert(cmd, script)
+    
+    local script_path = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jukit/kernel.py"
+    local cmd = {}
+
+    -- ★ 追加: SSH対応
+    if Config.options.ssh_host then
+        local host = Config.options.ssh_host
+        local remote_python = Config.options.ssh_python
+        
+        -- ローカルの kernel.py をリモートに転送して実行する強力なワンライナー
+        -- 1. scpで転送
+        -- 2. sshで実行
+        local scp_cmd = string.format("scp %s %s:/tmp/jukit_kernel.py", script_path, host)
+        vim.fn.system(scp_cmd) -- 同期実行で確実にファイルを送る
+        
+        cmd = {"ssh", host, remote_python, "-u", "/tmp/jukit_kernel.py"}
+        UI.append_to_repl("[Jukit] Connecting to remote: " .. host, "Special")
+    else
+        -- ローカル実行
+        cmd = vim.split(Config.options.python_interpreter, " ")
+        table.insert(cmd, script_path)
+    end
+
     State.job_id = vim.fn.jobstart(cmd, {
         on_stdout = on_stdout, on_stderr = on_stdout, stdout_buffered = false,
         on_exit = function() State.job_id = nil end
@@ -127,7 +151,7 @@ function M.send_payload(code, cell_id, filename)
     vim.diagnostic.reset(State.diag_ns, current_buf)
     vim.api.nvim_buf_clear_namespace(current_buf, State.diag_ns, 0, -1)
     
-    UI.set_cell_status(current_buf, cell_id, "running", "⏳ Running...")
+    UI.set_cell_status(current_buf, cell_id, "running", " Running...")
     
     UI.append_to_repl({"In [" .. cell_id .. "]:"}, "Type")
     local code_lines = vim.split(code, "\n")
@@ -142,16 +166,28 @@ function M.send_payload(code, cell_id, filename)
     vim.fn.chansend(State.job_id, msg .. "\n")
 end
 
+-- ★ 追加: プロファイリング
+function M.profile_cell(code, cell_id)
+    if not State.job_id then M.start_kernel() end
+    local msg = vim.fn.json_encode({
+        command = "profile", code = code, cell_id = cell_id
+    })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
+-- ★ 追加: コピー
+function M.copy_variable(args)
+    if not State.job_id then return vim.notify("Kernel not started", vim.log.levels.WARN) end
+    local var_name = args.args
+    if var_name == "" then var_name = vim.fn.expand("<cword>") end
+    local msg = vim.fn.json_encode({ command = "copy_to_clipboard", name = var_name })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
 function M.send_cell()
-    -- ★ 修正: ウィンドウチェックを追加し、勝手に開かないようにした
-    if not is_window_open() then
-        return vim.notify("Jukit windows are closed. Use :JukitOpen or :JukitToggle first.", vim.log.levels.WARN)
-    end
-
+    if not is_window_open() then return vim.notify("Jukit windows are closed. Use :JukitOpen or :JukitToggle first.", vim.log.levels.WARN) end
     local src_win = vim.api.nvim_get_current_win()
-    -- UI.open_windows(src_win) -- 削除
-    vim.api.nvim_set_current_win(src_win) -- 念のためフォーカス維持
-
+    vim.api.nvim_set_current_win(src_win)
     local s, e = Utils.get_cell_range()
     UI.flash_range(s, e)
     local lines = vim.api.nvim_buf_get_lines(0, s-1, e, false)
@@ -162,16 +198,21 @@ function M.send_cell()
     M.send_payload(table.concat(lines, "\n"), id, fn)
 end
 
-function M.send_selection()
-    -- ★ 修正
-    if not is_window_open() then
-        return vim.notify("Jukit windows are closed. Use :JukitOpen or :JukitToggle first.", vim.log.levels.WARN)
-    end
-
+-- ★ 追加: 現在のセルをプロファイル
+function M.run_profile_cell()
+    if not is_window_open() then return vim.notify("Jukit windows are closed.", vim.log.levels.WARN) end
     local src_win = vim.api.nvim_get_current_win()
-    -- UI.open_windows(src_win) -- 削除
-    vim.api.nvim_set_current_win(src_win)
+    local s, e = Utils.get_cell_range()
+    local lines = vim.api.nvim_buf_get_lines(0, s-1, e, false)
+    if #lines > 0 and lines[1]:match("^# %%%%") then table.remove(lines, 1) end
+    local id = Utils.get_current_cell_id(s)
+    M.profile_cell(table.concat(lines, "\n"), id)
+end
 
+function M.send_selection()
+    if not is_window_open() then return vim.notify("Jukit windows are closed.", vim.log.levels.WARN) end
+    local src_win = vim.api.nvim_get_current_win()
+    vim.api.nvim_set_current_win(src_win)
     local _, csrow, _, _ = unpack(vim.fn.getpos("'<"))
     local _, cerow, _, _ = unpack(vim.fn.getpos("'>"))
     local lines = vim.api.nvim_buf_get_lines(0, csrow - 1, cerow, false)
@@ -184,15 +225,9 @@ function M.send_selection()
 end
 
 function M.run_all_cells()
-    -- ★ 修正
-    if not is_window_open() then
-        return vim.notify("Jukit windows are closed. Use :JukitOpen or :JukitToggle first.", vim.log.levels.WARN)
-    end
-
+    if not is_window_open() then return vim.notify("Jukit windows are closed.", vim.log.levels.WARN) end
     local src_win = vim.api.nvim_get_current_win()
-    -- UI.open_windows(src_win) -- 削除
     vim.api.nvim_set_current_win(src_win)
-    
     if not State.job_id then M.start_kernel() end
     local fn = vim.fn.expand("%:t")
     if fn == "" then fn = "untitled" end
@@ -237,6 +272,72 @@ function M.check_cursor_cell()
             UI.open_markdown_preview(md_path)
         end
     end)
+end
+
+function M.interrupt_kernel()
+    if not State.job_id then return vim.notify("Kernel not running", vim.log.levels.WARN) end
+    
+    -- job_id から PID を取得して SIGINT (Ctrl+C相当) を送る
+    local pid = vim.fn.jobpid(State.job_id)
+    if pid then
+        -- Unix系なら kill -2、Windowsなら別の方法が必要だが、今回はLinux/Mac前提
+        vim.loop.kill(pid, 2) -- 2 = SIGINT
+        UI.append_to_repl("[Kernel Interrupted!]", "WarningMsg")
+        
+        -- 実行中のステータスがあればErrorに変えておく
+        for cell_id, buf in pairs(State.cell_buf_map) do
+            UI.set_cell_status(buf, cell_id, "error", "⛔ Interrupted")
+        end
+        State.cell_buf_map = {} -- クリア
+    else
+        vim.notify("Could not get PID for kernel", vim.log.levels.ERROR)
+    end
+end
+
+-- ★ 追加: セッション保存コマンド
+function M.save_session(args)
+    if not State.job_id then return end
+    local filename = args.args
+    if filename == "" then filename = "jukit_session.pkl" end -- デフォルト名
+    
+    local msg = vim.fn.json_encode({ command = "save_session", filename = filename })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
+-- ★ 追加: セッション読み込みコマンド
+function M.load_session(args)
+    if not State.job_id then M.start_kernel() end
+    local filename = args.args
+    if filename == "" then filename = "jukit_session.pkl" end
+    
+    local msg = vim.fn.json_encode({ command = "load_session", filename = filename })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
+-- ★ 追加: TUIプロット
+function M.plot_tui(args)
+    if not State.job_id then return end
+    local var_name = args.args
+    if var_name == "" then var_name = vim.fn.expand("<cword>") end
+
+    if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
+        -- ウィンドウ幅から行番号表示などの分（-5文字くらい）を引く
+        width = vim.api.nvim_win_get_width(State.win.output) - 5
+        if width < 20 then width = 20 end -- 最低幅保証
+    end
+    
+    local msg = vim.fn.json_encode({ command = "plot_tui", name = var_name, width = width })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
+
+-- コマンド関数を追加
+function M.inspect_object(args)
+    if not State.job_id then return vim.notify("Kernel not started", vim.log.levels.WARN) end
+    local var_name = args.args
+    if var_name == "" then var_name = vim.fn.expand("<cword>") end
+    
+    local msg = vim.fn.json_encode({ command = "inspect", name = var_name })
+    vim.fn.chansend(State.job_id, msg .. "\n")
 end
 
 return M

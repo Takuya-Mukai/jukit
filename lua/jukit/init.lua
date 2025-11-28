@@ -4,8 +4,7 @@ local Core = require("jukit.core")
 local UI = require("jukit.ui")
 local Utils = require("jukit.utils")
 
--- === ナビゲーション・編集 (initに残すのが自然なもの) ===
-
+-- Navigation helpers... (No changes needed here, keeping it brief)
 local function goto_next_cell()
     local cursor = vim.fn.line(".")
     local total = vim.api.nvim_buf_line_count(0)
@@ -68,36 +67,52 @@ local function merge_cell_below()
     end
 end
 
--- === セットアップ ===
 function M.setup(opts)
     Config.setup(opts)
     
+    -- Execution
     vim.api.nvim_create_user_command("JukitStart", Core.start_kernel, {})
     vim.api.nvim_create_user_command("JukitRun", Core.send_cell, {})
     vim.api.nvim_create_user_command("JukitSendSelection", Core.send_selection, { range = true })
     vim.api.nvim_create_user_command("JukitRunAll", Core.run_all_cells, {})
     vim.api.nvim_create_user_command("JukitRestart", Core.restart_kernel, {})
     
+    -- UI
     vim.api.nvim_create_user_command("JukitOpen", function() UI.open_windows() end, {})
     vim.api.nvim_create_user_command("JukitToggle", UI.toggle_windows, {})
-    vim.api.nvim_create_user_command("JukitClean", Core.clean_stale_cache, {})
-    
-    vim.api.nvim_create_user_command("JukitVars", Core.show_variables, {})
-    vim.api.nvim_create_user_command("JukitView", Core.view_dataframe, { nargs = "?" })
     vim.api.nvim_create_user_command("JukitClear", UI.clear_repl, {})
+    vim.api.nvim_create_user_command("JukitClean", Core.clean_stale_cache, {})
     vim.api.nvim_create_user_command("JukitClearDiag", UI.clear_diagnostics, {})
 
-    -- 編集系
+    -- Data & Tools
+    vim.api.nvim_create_user_command("JukitVars", Core.show_variables, {})
+    vim.api.nvim_create_user_command("JukitView", Core.view_dataframe, { nargs = "?" })
+    vim.api.nvim_create_user_command("JukitCopy", Core.copy_variable, { nargs = "?" }) -- ★追加
+    vim.api.nvim_create_user_command("JukitProfile", Core.run_profile_cell, {})      -- ★追加
+
+    -- Navigation
     vim.api.nvim_create_user_command("JukitNextCell", goto_next_cell, {})
     vim.api.nvim_create_user_command("JukitPrevCell", goto_prev_cell, {})
     vim.api.nvim_create_user_command("JukitNewCellBelow", insert_cell_below, {})
     vim.api.nvim_create_user_command("JukitNewCellAbove", insert_cell_above, {})
     vim.api.nvim_create_user_command("JukitMergeBelow", merge_cell_below, {})
     
-    -- 折りたたみ設定
+    -- Fold
     vim.opt.foldmethod = "expr"
     vim.opt.foldexpr = "getline(v:lnum)=~'^#\\ %%'?'0':'1'"
     vim.opt.foldlevel = 99
+
+    --kernel Control
+    vim.api.nvim_create_user_command("JukitInterrupt", Core.interrupt_kernel, {}) -- ★重要
+    
+    -- Session
+    vim.api.nvim_create_user_command("JukitSaveSession", Core.save_session, { nargs = "?" })
+    vim.api.nvim_create_user_command("JukitLoadSession", Core.load_session, { nargs = "?" })
+    
+    -- Plotting
+    vim.api.nvim_create_user_command("JukitPlotTUI", Core.plot_tui, { nargs = "?" })
+
+    vim.api.nvim_create_user_command("JukitDoc", Core.inspect_object, { nargs = "?" })
 
     vim.api.nvim_create_autocmd({"CursorHold", "CursorHoldI"}, {
         pattern = "*",

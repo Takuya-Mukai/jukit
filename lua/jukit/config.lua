@@ -1,17 +1,28 @@
 local M = {}
 
 M.defaults = {
-    preview_width_percent = 40,
+    -- UI
+    preview_width_percent = 35,
     repl_height_percent = 30,
-    preview_image_ratio = 0.6,
+    preview_image_ratio = 0.3,
     repl_image_ratio = 0.3,
+    
+    -- Visuals
     flash_highlight_group = "Visual",
     flash_duration = 300,
+    
+    -- Python Environment
     python_interpreter = "python3", 
+    
+    -- ★ 追加: SSH Remote Settings
+    -- 例: "user@192.168.1.10" または nil (ローカル)
+    ssh_host = nil, 
+    ssh_python = "python3", -- リモート側のPythonコマンド
+    
+    -- Behavior
     notify_threshold = 10,
 }
 
--- 現在の設定（setupで上書きされる）
 M.options = vim.deepcopy(M.defaults)
 
 function M.setup(opts)

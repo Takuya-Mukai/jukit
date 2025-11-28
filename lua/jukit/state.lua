@@ -1,6 +1,8 @@
 local M = {}
 
 M.job_id = nil
+M.term_chan = nil
+
 M.buf = { output = nil, preview = nil }
 M.win = { output = nil, preview = nil }
 
