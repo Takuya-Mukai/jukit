@@ -85,6 +85,7 @@ function M.setup(opts)
     vim.api.nvim_create_user_command("JukitVars", Core.show_variables, {})
     vim.api.nvim_create_user_command("JukitView", Core.view_dataframe, { nargs = "?" })
     vim.api.nvim_create_user_command("JukitClear", UI.clear_repl, {})
+    vim.api.nvim_create_user_command("JukitClearDiag", UI.clear_diagnostics, {})
 
     -- 編集系
     vim.api.nvim_create_user_command("JukitNextCell", goto_next_cell, {})

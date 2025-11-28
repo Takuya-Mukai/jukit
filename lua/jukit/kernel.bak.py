@@ -7,14 +7,8 @@ import glob
 import re
 import builtins
 import types
-
-# ★ IPythonのインポート (必須)
-try:
-    from IPython.core.interactiveshell import InteractiveShell
-    from IPython.core.displayhook import DisplayHook
-except ImportError:
-    sys.stderr.write("Error: IPython is not installed. Please install it with 'pip install ipython'\n")
-    sys.exit(1)
+import subprocess # ★追加
+import time       # ★追加
 
 # バックエンド設定
 import matplotlib
@@ -56,34 +50,16 @@ class JukitKernel:
         self.stdout_proxy = StreamCapture('stdout', self)
         self.stderr_proxy = StreamCapture('stderr', self)
         
-        # 標準出力をフック
         sys.stdout = self.stdout_proxy
         sys.stderr = self.stderr_proxy
         
-        # IPythonシェルの初期化
-        self.shell = InteractiveShell(display_banner=False)
-        
-        # ★ 修正: enable_matplotlibの呼び出しを削除し、
-        # ユーザーが %matplotlib inline を実行してもクラッシュしないようにダミー化する
-        # self.shell.enable_matplotlib(gui='inline')  <-- これがエラーの原因だった
-        self.shell.enable_matplotlib = lambda gui=None: None
-        
-        # IPythonもsys.stdoutを使うように強制
-        self.shell.showtraceback = self._custom_traceback
-
         self.original_input = builtins.input
         builtins.input = self._custom_input
 
-        # plt.show のフック
         self._original_show = plt.show
         def custom_show_wrapper(*args, **kwargs):
             return self._custom_show(*args, **kwargs)
         plt.show = custom_show_wrapper
-
-    def _custom_traceback(self, *args, **kwargs):
-        # IPythonのエラー表示もJukitのstderrプロキシ経由で送る
-        traceback_text = self.shell.InteractiveTB.text(*args, **kwargs)
-        self.stderr_proxy.write(traceback_text)
 
     def _custom_input(self, prompt=""):
         if prompt:
@@ -111,11 +87,9 @@ class JukitKernel:
 
     def _get_variables(self):
         var_list = []
-        # IPythonの user_ns (ユーザー名前空間) を参照
-        for name, value in list(self.shell.user_ns.items()):
+        for name, value in list(globals().items()):
             if name.startswith("_"): continue
             if isinstance(value, (types.ModuleType, types.FunctionType, type)): continue
-            if name in ['In', 'Out', 'exit', 'quit', 'get_ipython']: continue # IPython特有の変数は除外
             
             type_name = type(value).__name__
             info = str(value)
@@ -135,20 +109,23 @@ class JukitKernel:
         self.original_stdout.flush()
 
     def _get_dataframe_data(self, var_name):
-        if var_name not in self.shell.user_ns:
+        if var_name not in globals():
             return
-        val = self.shell.user_ns[var_name]
+        val = globals()[var_name]
         try:
             import pandas as pd
             import numpy as np
             
             df = None
-            if isinstance(val, pd.DataFrame): df = val
-            elif isinstance(val, pd.Series): df = val.to_frame()
+            if isinstance(val, pd.DataFrame):
+                df = val
+            elif isinstance(val, pd.Series):
+                df = val.to_frame()
             elif isinstance(val, np.ndarray):
                 if val.ndim > 2: raise ValueError("Only 1D/2D arrays supported")
                 df = pd.DataFrame(val)
-            else: return 
+            else:
+                return 
 
             df_view = df.head(100)
             data_json = df_view.to_json(orient='split', date_format='iso')
@@ -211,7 +188,6 @@ class JukitKernel:
             self.stderr_proxy.write(traceback.format_exc())
 
     def _clean_text_for_markdown(self, text):
-        # ANSIエスケープシーケンスを除去
         text = re.sub(r'\x1b\[[0-9;]*m', '', text) 
         lines = text.split('\n')
         cleaned_lines = []
@@ -248,6 +224,44 @@ class JukitKernel:
                     plain_text_output += f"\n[Image: {os.path.basename(item['path'])}]\n"
         return os.path.abspath(md_path), plain_text_output
 
+    # ★ 追加: マジックコマンド処理
+    def _preprocess_magic(self, code):
+        lines = code.split('\n')
+        processed_lines = []
+        
+        for line in lines:
+            stripped = line.strip()
+            # !command -> subprocess
+            if stripped.startswith('!'):
+                cmd = stripped[1:]
+                # シェルコマンドを実行して出力をprintするPythonコードに変換
+                escaped_cmd = cmd.replace('"', '\\"')
+                py_line = f'import subprocess; p=subprocess.run("{escaped_cmd}", shell=True, capture_output=True, text=True); print(p.stdout, end=""); print(p.stderr, end="")'
+                processed_lines.append(py_line)
+                escaped_cmd = cmd.replace('"', '\\"')
+                py_line = f'import subprocess; subprocess.run("{escaped_cmd}", shell=True)'
+                processed_lines.append(py_line)
+            
+            # %cd path -> os.chdir
+            elif stripped.startswith('%cd'):
+                path = stripped[3:].strip()
+                # パスの引用符を処理（簡易版）
+                if (path.startswith('"') and path.endswith('"')) or (path.startswith("'") and path.endswith("'")):
+                    path = path[1:-1]
+                py_line = f'import os; os.chdir(r"{path}"); print(f"cwd: {{os.getcwd()}}")'
+                processed_lines.append(py_line)
+                
+            # %time code -> 計測
+            elif stripped.startswith('%time '):
+                stmt = stripped[6:]
+                py_line = f'__t_start=__import__("time").time(); {stmt}; print(f"Wall time: {{__import__("time").time()-__t_start:.4f}}s")'
+                processed_lines.append(py_line)
+                
+            else:
+                processed_lines.append(line)
+                
+        return '\n'.join(processed_lines)
+
     def run_code(self, code, cell_id, filename):
         self.current_cell_id = cell_id
         self.current_filename = filename
@@ -256,31 +270,29 @@ class JukitKernel:
         self.stdout_proxy.reset()
         self.stderr_proxy.reset()
 
-        error_info = None
+        has_error = False
+        error_line = None
+        error_msg = ""
+
+        # ★ マジックコマンドの変換
+        transpiled_code = self._preprocess_magic(code)
 
         try:
-            # ★ exec() ではなく IPythonの run_cell を使う
-            # これにより !ls や %time などが動くようになる
-            result = self.shell.run_cell(code)
-            
-            if not result.success:
-                # エラーがあった場合、IPythonのResultオブジェクトから情報を取得できるか試みる
-                # ただし、tracebackはすでにstderrに出力されているはずなので、
-                # ここでは「どの行でエラーが起きたか」を特定するための情報を抽出する
-                if result.error_in_exec:
-                    # Pythonのエラー(Exception)
-                    tb = result.error_in_exec.__traceback__
-                    # 最後のフレーム（実際のコード）を探す
-                    while tb:
-                        if tb.tb_frame.f_code.co_filename.startswith("<ipython-input"):
-                            error_info = {
-                                "line": tb.tb_lineno,
-                                "msg": str(result.error_in_exec)
-                            }
-                            break
-                        tb = tb.tb_next
-                        
+            exec(transpiled_code, globals())
         except Exception:
+            has_error = True
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            tb_list = traceback.extract_tb(exc_traceback)
+            
+            for frame in tb_list:
+                if frame.filename == "<string>":
+                    error_line = frame.lineno
+                    break
+            
+            if error_line is None and isinstance(exc_value, SyntaxError):
+                error_line = exc_value.lineno
+
+            error_msg = f"{exc_type.__name__}: {exc_value}"
             self.stderr_proxy.write(traceback.format_exc())
         finally:
             md_path, text_log = self._save_markdown_result()
@@ -292,8 +304,11 @@ class JukitKernel:
                 "text_output": text_log 
             }
             
-            if error_info:
-                msg["error"] = error_info
+            if has_error and error_line is not None:
+                msg["error"] = {
+                    "line": error_line,
+                    "msg": error_msg
+                }
 
             self.original_stdout.write(json.dumps(msg) + "\n")
             self.original_stdout.flush()

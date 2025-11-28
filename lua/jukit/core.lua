@@ -4,6 +4,12 @@ local Config = require("jukit.config")
 local UI = require("jukit.ui")
 local Utils = require("jukit.utils")
 
+-- ★ 追加: ウィンドウが開いているかチェックするヘルパー
+local function is_window_open()
+    -- Outputウィンドウ（REPL）が開いていればOKとみなす
+    return State.win.output and vim.api.nvim_win_is_valid(State.win.output)
+end
+
 local function on_stdout(chan_id, data, name)
     if not data then return end
     for _, line in ipairs(data) do
@@ -27,9 +33,10 @@ local function on_stdout(chan_id, data, name)
                                 UI.send_notification("Calculation " .. msg.cell_id .. " Finished!")
                             end
 
-			    -- vim.diagnostic.reset(State.diag_ns, target_buf)
-
+                            -- 実行開始時にリセットしているので、ここはクリアせず追加のみ
+                            -- vim.diagnostic.reset(State.diag_ns, target_buf) -- 削除
                             vim.api.nvim_buf_clear_namespace(target_buf, State.diag_ns, 0, -1)
+                            
                             if msg.error then
                                 UI.set_cell_status(target_buf, msg.cell_id, "error", "✘ Error")
                                 local start_line = State.cell_start_line[msg.cell_id] or 1
@@ -39,7 +46,7 @@ local function on_stdout(chan_id, data, name)
                                     severity = vim.diagnostic.severity.ERROR, source = "Jukit",
                                 }})
                             else
-                                UI.set_cell_status(target_buf, msg.cell_id, "done", " Done")
+                                UI.set_cell_status(target_buf, msg.cell_id, "done", "✓ Done")
                             end
                         end
                         State.cell_buf_map[msg.cell_id] = nil
@@ -118,8 +125,8 @@ function M.send_payload(code, cell_id, filename)
     end
 
     vim.diagnostic.reset(State.diag_ns, current_buf)
-
     vim.api.nvim_buf_clear_namespace(current_buf, State.diag_ns, 0, -1)
+    
     UI.set_cell_status(current_buf, cell_id, "running", "⏳ Running...")
     
     UI.append_to_repl({"In [" .. cell_id .. "]:"}, "Type")
@@ -136,9 +143,15 @@ function M.send_payload(code, cell_id, filename)
 end
 
 function M.send_cell()
+    -- ★ 修正: ウィンドウチェックを追加し、勝手に開かないようにした
+    if not is_window_open() then
+        return vim.notify("Jukit windows are closed. Use :JukitOpen or :JukitToggle first.", vim.log.levels.WARN)
+    end
+
     local src_win = vim.api.nvim_get_current_win()
-    UI.open_windows(src_win)
-    vim.api.nvim_set_current_win(src_win)
+    -- UI.open_windows(src_win) -- 削除
+    vim.api.nvim_set_current_win(src_win) -- 念のためフォーカス維持
+
     local s, e = Utils.get_cell_range()
     UI.flash_range(s, e)
     local lines = vim.api.nvim_buf_get_lines(0, s-1, e, false)
@@ -150,9 +163,15 @@ function M.send_cell()
 end
 
 function M.send_selection()
+    -- ★ 修正
+    if not is_window_open() then
+        return vim.notify("Jukit windows are closed. Use :JukitOpen or :JukitToggle first.", vim.log.levels.WARN)
+    end
+
     local src_win = vim.api.nvim_get_current_win()
-    UI.open_windows(src_win)
+    -- UI.open_windows(src_win) -- 削除
     vim.api.nvim_set_current_win(src_win)
+
     local _, csrow, _, _ = unpack(vim.fn.getpos("'<"))
     local _, cerow, _, _ = unpack(vim.fn.getpos("'>"))
     local lines = vim.api.nvim_buf_get_lines(0, csrow - 1, cerow, false)
@@ -165,9 +184,15 @@ function M.send_selection()
 end
 
 function M.run_all_cells()
+    -- ★ 修正
+    if not is_window_open() then
+        return vim.notify("Jukit windows are closed. Use :JukitOpen or :JukitToggle first.", vim.log.levels.WARN)
+    end
+
     local src_win = vim.api.nvim_get_current_win()
-    UI.open_windows(src_win)
+    -- UI.open_windows(src_win) -- 削除
     vim.api.nvim_set_current_win(src_win)
+    
     if not State.job_id then M.start_kernel() end
     local fn = vim.fn.expand("%:t")
     if fn == "" then fn = "untitled" end

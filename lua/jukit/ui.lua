@@ -41,16 +41,30 @@ end
 function M.append_stream_text(text)
     if not (State.buf.output and vim.api.nvim_buf_is_valid(State.buf.output)) then return end
     local buf = State.buf.output
+    
     if text:find("\r") then
+        -- \r (行頭に戻る) が含まれている場合
         local parts = vim.split(text, "\r")
-        local last_part = parts[#parts]
+        local last_part = parts[#parts] -- 最後の更新分だけを採用
+        
+        -- ★修正: last_part の中に \n が混ざっている可能性があるので、さらに分解する
+        local lines = vim.split(last_part, "\n")
+        
+        -- 末尾が空文字なら削除（余計な空行を防ぐ）
+        if lines[#lines] == "" and #lines > 1 then 
+            table.remove(lines, #lines) 
+        end
+        
         local count = vim.api.nvim_buf_line_count(buf)
-        vim.api.nvim_buf_set_lines(buf, count - 1, count, false, {last_part})
+        -- 現在の最終行を、新しい内容（複数行かもしれない）で置き換える
+        vim.api.nvim_buf_set_lines(buf, count - 1, count, false, lines)
     else
+        -- 通常の出力
         local lines = vim.split(text, "\n")
         if lines[#lines] == "" and #lines > 1 then table.remove(lines, #lines) end
         vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
     end
+    
     if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
         local count = vim.api.nvim_buf_line_count(buf)
         vim.api.nvim_win_set_cursor(State.win.output, {count, 0})
@@ -260,6 +274,18 @@ function M.clear_repl()
     if State.buf.output and vim.api.nvim_buf_is_valid(State.buf.output) then
         vim.api.nvim_buf_set_lines(State.buf.output, 0, -1, false, {"[Jukit Console Cleared]"})
     end
+end
+
+function M.clear_diagnostics()
+    local bufnr = vim.api.nvim_get_current_buf()
+    
+    -- 診断情報をリセット
+    vim.diagnostic.reset(State.diag_ns, bufnr)
+    
+    -- 名前空間も念のためクリア（Virtual Textなどを消す）
+    vim.api.nvim_buf_clear_namespace(bufnr, State.diag_ns, 0, -1)
+    
+    vim.notify("Jukit diagnostics cleared", vim.log.levels.INFO)
 end
 
 return M
