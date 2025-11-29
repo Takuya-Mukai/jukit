@@ -120,7 +120,8 @@ end
 function M.start_kernel()
     if State.job_id then return end
     
-    local script_path = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jovian/kernel.py"
+    local script_path = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jovian/backend/main.py"
+    local backend_dir = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jovian/backend"
     local cmd = {}
 
     -- ★ 追加: SSH対応
@@ -128,13 +129,18 @@ function M.start_kernel()
         local host = Config.options.ssh_host
         local remote_python = Config.options.ssh_python
         
-        -- ローカルの kernel.py をリモートに転送して実行する強力なワンライナー
-        -- 1. scpで転送
-        -- 2. sshで実行
-        local scp_cmd = string.format("scp %s %s:/tmp/jovian_kernel.py", script_path, host)
+        -- ローカルの backend ディレクトリをリモートに転送
+        -- 1. scp -r でディレクトリごと転送
+        -- 2. sshで実行 (python3 -m jovian.backend.main ではなく、直接 main.py を指定)
+        -- リモート側の配置先: /tmp/jovian_backend
+        
+        -- まずリモートの古いディレクトリを消す（念のため）
+        vim.fn.system(string.format("ssh %s 'rm -rf /tmp/jovian_backend'", host))
+        
+        local scp_cmd = string.format("scp -r %s %s:/tmp/jovian_backend", backend_dir, host)
         vim.fn.system(scp_cmd) -- 同期実行で確実にファイルを送る
         
-        cmd = {"ssh", host, remote_python, "-u", "/tmp/jovian_kernel.py"}
+        cmd = {"ssh", host, remote_python, "-u", "/tmp/jovian_backend/main.py"}
         UI.append_to_repl("[Jovian] Connecting to remote: " .. host, "Special")
     else
         -- ローカル実行
@@ -337,7 +343,21 @@ function M.load_session(args)
     vim.fn.chansend(State.job_id, msg .. "\n")
 end
 
+-- ★ 追加: TUIプロット
+function M.plot_tui(args)
+    if not State.job_id then return end
+    local var_name = args.args
+    if var_name == "" then var_name = vim.fn.expand("<cword>") end
 
+    if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
+        -- ウィンドウ幅から行番号表示などの分（-5文字くらい）を引く
+        width = vim.api.nvim_win_get_width(State.win.output) - 5
+        if width < 20 then width = 20 end -- 最低幅保証
+    end
+    
+    local msg = vim.fn.json_encode({ command = "plot_tui", name = var_name, width = width })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+end
 
 -- コマンド関数を追加
 function M.inspect_object(args)

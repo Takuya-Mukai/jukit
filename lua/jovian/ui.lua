@@ -155,8 +155,8 @@ function M.open_windows(target_win)
             vim.api.nvim_set_current_win(return_to) 
         end
         
-        vim.cmd("split")
-        vim.cmd("wincmd j")
+        vim.cmd("belowright split")
+        -- vim.cmd("wincmd j") -- belowright puts us in the new bottom window
         State.win.output = vim.api.nvim_get_current_win()
         State.buf.output = M.get_or_create_buf("JovianConsole")
         
@@ -486,13 +486,13 @@ function M.show_inspection(data)
     table.insert(lines, "# " .. data.name .. " (" .. data.type .. ")")
     table.insert(lines, "")
     
-    if data.definition and data.definition ~= "" then
+    if data.definition and data.definition ~= vim.NIL and data.definition ~= "" then
         table.insert(lines, "## Definition:")
         table.insert(lines, data.definition)
         table.insert(lines, "")
     end
     
-    if data.docstring then
+    if data.docstring and data.docstring ~= vim.NIL then
         table.insert(lines, "## Docstring:")
         -- docstringを行に分解して追加
         for _, l in ipairs(vim.split(data.docstring, "\n")) do
