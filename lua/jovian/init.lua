@@ -87,6 +87,7 @@ function M.setup(opts)
 	vim.api.nvim_create_user_command("JovianClear", UI.clear_repl, {})
 	vim.api.nvim_create_user_command("JovianClean", Core.clean_stale_cache, {})
 	vim.api.nvim_create_user_command("JovianClearDiag", UI.clear_diagnostics, {})
+    vim.api.nvim_create_user_command("JovianToggleVars", UI.toggle_variables_pane, {})
 
 	-- Data & Tools
 	vim.api.nvim_create_user_command("JovianVars", Core.show_variables, {})

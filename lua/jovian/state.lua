@@ -3,8 +3,17 @@ local M = {}
 M.job_id = nil
 M.term_chan = nil
 
-M.buf = { output = nil, preview = nil }
-M.win = { output = nil, preview = nil }
+M.win = {
+    output = nil,
+    preview = nil,
+    variables = nil, -- Add: Variables pane window
+}
+
+M.buf = {
+    output = nil,
+    variables = nil, -- Add: Variables pane buffer
+    preview = nil
+}
 
 -- Highlight Namespaces
 M.hl_ns = vim.api.nvim_create_namespace("JovianCellHighlight")

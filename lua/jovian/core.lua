@@ -47,6 +47,7 @@ local function on_stdout(chan_id, data, name)
 						UI.append_to_repl("-> Done: " .. msg.cell_id, "Comment")
 						State.current_preview_file = nil
 						UI.open_markdown_preview(msg.file)
+                        UI.update_variables_pane()
 
 						local target_buf = State.cell_buf_map[msg.cell_id]
 						if target_buf and vim.api.nvim_buf_is_valid(target_buf) then

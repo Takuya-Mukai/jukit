@@ -278,8 +278,63 @@ function M.set_cell_status(bufnr, cell_id, status, msg)
 	end
 end
 
+function M.render_variables_pane(vars)
+    if not (State.buf.variables and vim.api.nvim_buf_is_valid(State.buf.variables)) then return end
+    local buf = State.buf.variables
+    
+    local SEPARATOR = " " 
+    local PADDING = 1
+    
+    -- 1. Calculate column widths
+    local max_name_w = 4
+    local max_type_w = 4
+    
+    for _, v in ipairs(vars) do
+        max_name_w = math.max(max_name_w, vim.fn.strdisplaywidth(v.name))
+        max_type_w = math.max(max_type_w, vim.fn.strdisplaywidth(v.type))
+    end
+
+    local function pad_str(s, w) 
+        local vis_w = vim.fn.strdisplaywidth(s)
+        return s .. string.rep(" ", w - vis_w + PADDING)
+    end
+
+    local fmt_lines = {}
+    
+    -- Header
+    local header = pad_str("NAME", max_name_w) .. SEPARATOR ..
+                   pad_str("TYPE", max_type_w) .. SEPARATOR ..
+                   "VALUE"
+    table.insert(fmt_lines, header)
+    table.insert(fmt_lines, string.rep("-", #header + 10)) -- Simple separator
+
+    if #vars == 0 then
+        table.insert(fmt_lines, "(No variables defined)")
+    else
+        for _, v in ipairs(vars) do
+            local line = pad_str(v.name, max_name_w) .. SEPARATOR ..
+                         pad_str(v.type, max_type_w) .. SEPARATOR ..
+                         v.info 
+            table.insert(fmt_lines, line)
+        end
+    end
+
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, fmt_lines)
+    
+    -- Simple highlighting
+    vim.api.nvim_buf_add_highlight(buf, -1, "Title", 0, 0, -1)
+    vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 1, 0, -1)
+end
+
 function M.show_variables(vars)
-	local buf = vim.api.nvim_create_buf(false, true)
+    -- If persistent pane is open, render there
+    if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
+        M.render_variables_pane(vars)
+        return
+    end
+
+    -- Otherwise, show floating window (existing logic)
+    local buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
 
 	local SEPARATOR = " │ "
@@ -642,7 +697,65 @@ function M.clear_diagnostics()
 	local bufnr = vim.api.nvim_get_current_buf()
 	vim.diagnostic.reset(State.diag_ns, bufnr)
 	vim.api.nvim_buf_clear_namespace(bufnr, State.diag_ns, 0, -1)
-	vim.notify("Jovian diagnostics cleared", vim.log.levels.INFO)
+    vim.notify("Jovian diagnostics cleared", vim.log.levels.INFO)
+end
+
+function M.update_variables_pane()
+    if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) and State.job_id then
+        local msg = vim.fn.json_encode({ command = "get_variables" })
+        vim.fn.chansend(State.job_id, msg .. "\n")
+    end
+end
+
+function M.toggle_variables_pane()
+    local cur_win = vim.api.nvim_get_current_win()
+
+    if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
+        vim.api.nvim_win_close(State.win.variables, true)
+        State.win.variables = nil
+        -- Return focus
+        if vim.api.nvim_win_is_valid(cur_win) then vim.api.nvim_set_current_win(cur_win) end
+        return
+    end
+
+    -- Create Buffer if needed
+    if not (State.buf.variables and vim.api.nvim_buf_is_valid(State.buf.variables)) then
+        State.buf.variables = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_buf_set_name(State.buf.variables, "JovianVariables")
+        vim.api.nvim_buf_set_option(State.buf.variables, "buftype", "nofile")
+        vim.api.nvim_buf_set_option(State.buf.variables, "filetype", "jovian_vars")
+    end
+
+    -- Create Window
+    -- Priority: Above Preview if exists, else Right Column
+    if State.win.preview and vim.api.nvim_win_is_valid(State.win.preview) then
+        vim.api.nvim_set_current_win(State.win.preview)
+        vim.cmd("aboveleft split")
+    else
+        vim.cmd("vsplit")
+        vim.cmd("wincmd L")
+    end
+
+    State.win.variables = vim.api.nvim_get_current_win()
+    vim.api.nvim_win_set_buf(State.win.variables, State.buf.variables)
+
+    -- Apply Height
+    local target_height = Config.options.vars_pane_height
+    vim.api.nvim_win_set_height(State.win.variables, target_height)
+
+    -- Window Options
+    local win = State.win.variables
+    vim.wo[win].number = false
+    vim.wo[win].relativenumber = false
+    vim.wo[win].signcolumn = "no"
+    vim.wo[win].wrap = false
+    vim.wo[win].winfixwidth = true
+
+    -- Return focus
+    if vim.api.nvim_win_is_valid(cur_win) then vim.api.nvim_set_current_win(cur_win) end
+    
+    -- Trigger initial update
+    M.update_variables_pane()
 end
 
 return M
