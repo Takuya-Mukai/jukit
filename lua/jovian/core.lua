@@ -11,23 +11,23 @@ end
 local function on_stdout(chan_id, data, name)
     if not data then return end
     
-    -- バッファリング処理
+    -- Buffering processing
     if not State.stdout_buffer then State.stdout_buffer = "" end
     
-    -- データを結合
-    -- data はテーブル (lines) なので、まずは結合する
-    -- ただし、最後の要素が空文字列でない場合、それは「行の途中」を意味する可能性がある
-    -- vim.fn.jobstart の仕様上、data の最後の要素は通常、次のチャンクへの続きか、改行後の空文字
+    -- Concatenate data
+    -- data is a table (lines), so concatenate first
+    -- However, if the last element is not empty, it might mean "mid-line"
+    -- vim.fn.jobstart spec: last element is usually continuation or empty string after newline
     
     local chunk = table.concat(data, "\n")
     State.stdout_buffer = State.stdout_buffer .. chunk
     
-    -- 改行で分割して処理
+    -- Split by newline and process
     local lines = vim.split(State.stdout_buffer, "\n")
     
-    -- 最後の要素は「不完全な行」の可能性が高いので、バッファに戻す
-    -- もし最後の要素が空文字なら、直前は改行で終わっていたということなので、
-    -- バッファは空にしてよい。
+    -- The last element is likely an incomplete line, so put it back in buffer
+    -- If the last element is empty, the previous one ended with newline,
+    -- so buffer can be cleared.
     State.stdout_buffer = table.remove(lines)
     
     for _, line in ipairs(lines) do
@@ -52,11 +52,11 @@ local function on_stdout(chan_id, data, name)
                             end
                             vim.api.nvim_buf_clear_namespace(target_buf, State.diag_ns, 0, -1)
                             
-                            -- ★ 修正: status フィールドもチェックする
+                            -- Fix: Check status field as well
                             if msg.error or msg.status == "error" then
                                 UI.set_cell_status(target_buf, msg.cell_id, "error", "✘ Error")
                                 
-                                -- エラー情報があれば診断を表示
+                                -- Show diagnostics if error info exists
                                 if msg.error then
                                     local start_line = State.cell_start_line[msg.cell_id] or 1
                                     local target_line = (start_line - 1) + (msg.error.line - 1)
@@ -129,26 +129,26 @@ function M.start_kernel()
     local backend_dir = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jovian/backend"
     local cmd = {}
 
-    -- ★ 追加: SSH対応
+    -- Add: SSH support
     if Config.options.ssh_host then
         local host = Config.options.ssh_host
         local remote_python = Config.options.ssh_python
         
-        -- ローカルの backend ディレクトリをリモートに転送
-        -- 1. scp -r でディレクトリごと転送
-        -- 2. sshで実行 (python3 -m jovian.backend.main ではなく、直接 main.py を指定)
-        -- リモート側の配置先: /tmp/jovian_backend
+        -- Transfer local backend directory to remote
+        -- 1. scp -r to transfer directory
+        -- 2. execute via ssh (specify main.py directly)
+        -- Remote location: /tmp/jovian_backend
         
-        -- まずリモートの古いディレクトリを消す（念のため）
+        -- First remove old remote directory (just in case)
         vim.fn.system(string.format("ssh %s 'rm -rf /tmp/jovian_backend'", host))
         
         local scp_cmd = string.format("scp -r %s %s:/tmp/jovian_backend", backend_dir, host)
-        vim.fn.system(scp_cmd) -- 同期実行で確実にファイルを送る
+        vim.fn.system(scp_cmd) -- Synchronous execution to ensure file transfer
         
         cmd = {"ssh", host, remote_python, "-u", "/tmp/jovian_backend/main.py"}
         UI.append_to_repl("[Jovian] Connecting to remote: " .. host, "Special")
     else
-        -- ローカル実行
+        -- Local execution
         cmd = vim.split(Config.options.python_interpreter, " ")
         table.insert(cmd, script_path)
     end
@@ -200,7 +200,7 @@ function M.send_payload(code, cell_id, filename)
     vim.fn.chansend(State.job_id, msg .. "\n")
 end
 
--- ★ 追加: プロファイリング
+-- Add: Profiling
 function M.profile_cell(code, cell_id)
     if not State.job_id then M.start_kernel() end
     local msg = vim.fn.json_encode({
@@ -209,7 +209,7 @@ function M.profile_cell(code, cell_id)
     vim.fn.chansend(State.job_id, msg .. "\n")
 end
 
--- ★ 追加: コピー
+-- Add: Copy
 function M.copy_variable(args)
     if not State.job_id then return vim.notify("Kernel not started", vim.log.levels.WARN) end
     local var_name = args.args
@@ -232,7 +232,7 @@ function M.send_cell()
     M.send_payload(table.concat(lines, "\n"), id, fn)
 end
 
--- ★ 追加: 現在のセルをプロファイル
+-- Add: Profile current cell
 function M.run_profile_cell()
     if not is_window_open() then return vim.notify("Jovian windows are closed.", vim.log.levels.WARN) end
     local src_win = vim.api.nvim_get_current_win()
@@ -346,34 +346,34 @@ end
 function M.interrupt_kernel()
     if not State.job_id then return vim.notify("Kernel not running", vim.log.levels.WARN) end
     
-    -- job_id から PID を取得して SIGINT (Ctrl+C相当) を送る
+    -- Get PID from job_id and send SIGINT (Ctrl+C equivalent)
     local pid = vim.fn.jobpid(State.job_id)
     if pid then
-        -- Unix系なら kill -2、Windowsなら別の方法が必要だが、今回はLinux/Mac前提
+        -- kill -2 for Unix, assuming Linux/Mac for now
         vim.loop.kill(pid, 2) -- 2 = SIGINT
         UI.append_to_repl("[Kernel Interrupted!]", "WarningMsg")
         
-        -- 実行中のステータスがあればErrorに変えておく
+        -- Change status to Error if running
         for cell_id, buf in pairs(State.cell_buf_map) do
             UI.set_cell_status(buf, cell_id, "error", "⛔ Interrupted")
         end
-        State.cell_buf_map = {} -- クリア
+        State.cell_buf_map = {} -- Clear
     else
         vim.notify("Could not get PID for kernel", vim.log.levels.ERROR)
     end
 end
 
--- ★ 追加: セッション保存コマンド
+-- Add: Save session command
 function M.save_session(args)
     if not State.job_id then return end
     local filename = args.args
-    if filename == "" then filename = "jovian_session.pkl" end -- デフォルト名
+    if filename == "" then filename = "jovian_session.pkl" end -- Default name
     
     local msg = vim.fn.json_encode({ command = "save_session", filename = filename })
     vim.fn.chansend(State.job_id, msg .. "\n")
 end
 
--- ★ 追加: セッション読み込みコマンド
+-- Add: Load session command
 function M.load_session(args)
     if not State.job_id then M.start_kernel() end
     local filename = args.args
@@ -383,23 +383,23 @@ function M.load_session(args)
     vim.fn.chansend(State.job_id, msg .. "\n")
 end
 
--- ★ 追加: TUIプロット
+-- Add: TUI Plot
 function M.plot_tui(args)
     if not State.job_id then return end
     local var_name = args.args
     if var_name == "" then var_name = vim.fn.expand("<cword>") end
 
     if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
-        -- ウィンドウ幅から行番号表示などの分（-5文字くらい）を引く
+        -- Subtract line number width etc. (approx 5 chars) from window width
         width = vim.api.nvim_win_get_width(State.win.output) - 5
-        if width < 20 then width = 20 end -- 最低幅保証
+        if width < 20 then width = 20 end -- Minimum width guarantee
     end
     
     local msg = vim.fn.json_encode({ command = "plot_tui", name = var_name, width = width })
     vim.fn.chansend(State.job_id, msg .. "\n")
 end
 
--- コマンド関数を追加
+-- Add command functions
 function M.inspect_object(args)
     if not State.job_id then return vim.notify("Kernel not started", vim.log.levels.WARN) end
     local var_name = args.args

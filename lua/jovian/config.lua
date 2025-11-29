@@ -14,10 +14,9 @@ M.defaults = {
     -- Python Environment
     python_interpreter = "python3", 
     
-    -- ★ 追加: SSH Remote Settings
-    -- 例: "user@192.168.1.10" または nil (ローカル)
-    ssh_host = nil, 
-    ssh_python = "python3", -- リモート側のPythonコマンド
+    -- Add: SSH Remote Settings
+    ssh_host = nil, -- Example: "user@192.168.1.10" or nil (local)
+    ssh_python = "python3", -- Remote Python command
     
     -- Behavior
     notify_threshold = 10,

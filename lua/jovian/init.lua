@@ -87,8 +87,8 @@ function M.setup(opts)
     -- Data & Tools
     vim.api.nvim_create_user_command("JovianVars", Core.show_variables, {})
     vim.api.nvim_create_user_command("JovianView", Core.view_dataframe, { nargs = "?" })
-    vim.api.nvim_create_user_command("JovianCopy", Core.copy_variable, { nargs = "?" }) -- ★追加
-    vim.api.nvim_create_user_command("JovianProfile", Core.run_profile_cell, {})      -- ★追加
+    vim.api.nvim_create_user_command("JovianCopy", Core.copy_variable, { nargs = "?" })
+    vim.api.nvim_create_user_command("JovianProfile", Core.run_profile_cell, {})
 
     -- Navigation
     vim.api.nvim_create_user_command("JovianNextCell", goto_next_cell, {})
@@ -102,16 +102,14 @@ function M.setup(opts)
     vim.opt.foldexpr = "getline(v:lnum)=~'^#\\ %%'?'0':'1'"
     vim.opt.foldlevel = 99
 
-    --kernel Control
-    vim.api.nvim_create_user_command("JovianInterrupt", Core.interrupt_kernel, {}) -- ★重要
+    -- Kernel Control
+    vim.api.nvim_create_user_command("JovianInterrupt", Core.interrupt_kernel, {})
     
     -- Session
     vim.api.nvim_create_user_command("JovianSaveSession", Core.save_session, { nargs = "?" })
     vim.api.nvim_create_user_command("JovianLoadSession", Core.load_session, { nargs = "?" })
     
     -- Plotting
-
-
     vim.api.nvim_create_user_command("JovianDoc", function(opts) require("jovian.core").inspect_object(opts) end, { nargs = "?" })
     vim.api.nvim_create_user_command("JovianPeek", function(opts) require("jovian.core").peek_symbol(opts) end, { nargs = "?" })
     

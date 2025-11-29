@@ -20,15 +20,11 @@ function M.get_or_create_buf(name)
     vim.api.nvim_buf_set_name(buf, name)
     vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
     
-    -- ここでターミナルモードとして開き、チャンネルIDを保存
+    -- Open as terminal mode here and save channel ID
     State.term_chan = vim.api.nvim_open_term(buf, {})
     
     return buf
 end
-
--- lua/jovian/ui.lua
-
--- ... (前略)
 
 function M.append_to_repl(text, hl_group)
     if not State.term_chan then return end
@@ -36,7 +32,7 @@ function M.append_to_repl(text, hl_group)
     local lines = type(text) == "table" and text or vim.split(text, "\n")
     local output = ""
     
-    -- ANSI カラーコード定義
+    -- ANSI Color Code Definitions
     local RESET = "\x1b[0m"
     local BOLD  = "\x1b[1m"
     local GREEN = "\x1b[32m"
@@ -49,25 +45,25 @@ function M.append_to_repl(text, hl_group)
     local color_end = RESET
     
     if hl_group == "Type" then
-        -- プロンプト (In [abc]:) -> 緑 & 太字
+        -- Prompt (In [abc]:) -> Green & Bold
         color_start = GREEN .. BOLD
         
-        -- ★ 工夫: プロンプトの前に、うっすらと区切り線を入れる
-        -- これで前の実行結果との境目がはっきりする
+        -- Tip: Insert a faint separator line before the prompt
+        -- This makes the boundary with previous results clear
         output = output .. GREY .. string.rep("─", 40) .. RESET .. "\r\n"
         
     elseif hl_group == nil then
-        -- コード本文 (hl_groupなし) -> シアン (これで見分けがつく！)
+        -- Code body (no hl_group) -> Cyan (Distinguishable!)
         color_start = CYAN
         
     elseif hl_group == "Special" then
-        -- 画像保存通知など -> 青
+        -- Image save notification etc. -> Blue
         color_start = BLUE
     elseif hl_group == "WarningMsg" then
-        -- 警告 -> 黄色
+        -- Warning -> Yellow
         color_start = YELLOW
     elseif hl_group == "Comment" then
-        -- 完了通知など -> グレー
+        -- Completion notification etc. -> Grey
         color_start = GREY
     end
 
@@ -75,10 +71,10 @@ function M.append_to_repl(text, hl_group)
         output = output .. color_start .. line .. color_end .. "\r\n"
     end
     
-    -- ターミナルに送信
+    -- Send to terminal
     vim.api.nvim_chan_send(State.term_chan, output)
     
-    -- オートスクロール
+    -- Auto-scroll
     if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
         local buf = State.buf.output
         local count = vim.api.nvim_buf_line_count(buf)
@@ -86,18 +82,18 @@ function M.append_to_repl(text, hl_group)
     end
 end
 
--- ★ 修正: ストリーム出力 (超シンプルになる)
+-- Fix: Stream output (Simplified)
 function M.append_stream_text(text, stream_type)
     if not State.term_chan then return end
     
-    -- \r や \n の処理は nvim_open_term が勝手にやってくれるので、
-    -- そのまま流し込むだけでいい！
+    -- nvim_open_term handles \r and \n automatically,
+    -- so just send it as is!
     
-    -- ただし、Unixの改行(\n)をターミナル用の改行(\r\n)に変換しておくと表示が崩れにくい
-    -- (IPythonはすでに \r\n を送ってくることが多いが念のため)
+    -- However, converting Unix newline (\n) to terminal newline (\r\n) prevents display issues
+    -- (IPython often sends \r\n already, but just in case)
     local clean_text = text:gsub("\n", "\r\n")
     
-    -- stderrなら赤くする
+    -- Red for stderr
     if stream_type == "stderr" then
         local RED = "\x1b[31m"
         local RESET = "\x1b[0m"
@@ -124,8 +120,8 @@ function M.flash_range(start_line, end_line)
 end
 
 function M.open_windows(target_win)
-    -- 引数がなければ「現在」を取得するが、
-    -- toggle_windows から呼ばれた場合は target_win が必ず入るようにする
+    -- Get "current" if no argument,
+    -- but ensure target_win is passed if called from toggle_windows
     local return_to = target_win or vim.api.nvim_get_current_win()
 
     -- Preview Window
@@ -138,7 +134,7 @@ function M.open_windows(target_win)
         local pbuf = vim.api.nvim_create_buf(false, true)
         vim.api.nvim_win_set_buf(State.win.preview, pbuf)
         
-        -- 見た目設定
+        -- Appearance settings
         local win = State.win.preview
         vim.wo[win].number = false
         vim.wo[win].relativenumber = false
@@ -149,8 +145,8 @@ function M.open_windows(target_win)
 
     -- REPL Window
     if not (State.win.output and vim.api.nvim_win_is_valid(State.win.output)) then
-        -- 分割前に、一度「戻り先（コード）」にフォーカスを戻す
-        -- これをしないと、Previewウィンドウから分割されてしまうことがある
+        -- Return focus to "code" before splitting
+        -- Otherwise it might split from the Preview window
         if vim.api.nvim_win_is_valid(return_to) then 
             vim.api.nvim_set_current_win(return_to) 
         end
@@ -168,7 +164,7 @@ function M.open_windows(target_win)
         local height = math.floor(vim.o.lines * (Config.options.repl_height_percent / 100))
         vim.api.nvim_win_set_height(State.win.output, height)
         
-        -- 見た目設定
+        -- Appearance settings
         local win = State.win.output
         vim.wo[win].number = false
         vim.wo[win].relativenumber = false
@@ -177,7 +173,7 @@ function M.open_windows(target_win)
         vim.wo[win].fillchars = "eob: "
     end
 
-    -- ★ 修正: 同期的に一度戻り、念のため schedule でも戻る「二段構え」にする
+    -- Fix: Return synchronously once, and also via schedule as a backup
     if return_to and vim.api.nvim_win_is_valid(return_to) then
         vim.api.nvim_set_current_win(return_to)
     end
@@ -185,7 +181,7 @@ function M.open_windows(target_win)
     vim.defer_fn(function()
         if return_to and vim.api.nvim_win_is_valid(return_to) then
             vim.api.nvim_set_current_win(return_to)
-            -- 万が一ターミナルモードに入ってしまっていた場合のために stopinsert も念のため呼ぶ
+            -- Call stopinsert just in case we entered terminal mode
             vim.cmd("stopinsert")
         end
     end, 50)
@@ -199,20 +195,20 @@ function M.close_windows()
 end
 
 function M.toggle_windows()
-    -- ★ 修正: 実行前のウィンドウID（コードのウィンドウ）を確実に捕まえる
+    -- Fix: Reliably capture the window ID (code window) before execution
     local cur_win = vim.api.nvim_get_current_win()
 
     if (State.win.preview and vim.api.nvim_win_is_valid(State.win.preview)) or 
        (State.win.output and vim.api.nvim_win_is_valid(State.win.output)) then
-        -- 閉じる場合
+        -- Closing
         M.close_windows()
         
-        -- 閉じた後、もし元のウィンドウが生きていればそこに戻る
+        -- After closing, return to original window if it still exists
         if vim.api.nvim_win_is_valid(cur_win) then
             vim.api.nvim_set_current_win(cur_win)
         end
     else
-        -- 開く場合: 捕まえた cur_win を「戻り先」として渡す
+        -- Opening: Pass captured cur_win as "return destination"
         M.open_windows(cur_win)
     end
 end
@@ -261,47 +257,16 @@ function M.show_variables(vars)
     local SEPARATOR = " │ " 
     local PADDING = 1
     
-    -- ★ 追加: 変数が空の場合のガード処理
-    if #vars == 0 then
-        local lines = {
-            "Variable List",
-            "--------------------------------",
-            " (No variables defined yet) ",
-            "",
-            " Run some code to define variables."
-        }
-        vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-        vim.api.nvim_buf_add_highlight(buf, -1, "Title", 0, 0, -1)
-        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 2, 0, -1)
-        
-        -- 小さなウィンドウを出す
-        local width = 40
-        local height = 6
-        local row = math.floor((vim.o.lines - height) / 2)
-        local col = math.floor((vim.o.columns - width) / 2)
-        local win = vim.api.nvim_open_win(buf, true, {
-            relative = "editor", width = width, height = height, row = row, col = col,
-            style = "minimal", border = "rounded", title = " Variables ", title_pos = "center"
-        })
-        -- 閉じる設定
-        local opts = { noremap = true, silent = true }
-        vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)
-        vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", ":close<CR>", opts)
-        return
-    end
-
-    -- === 以下、変数が1つ以上ある場合の通常処理 (前回と同じ) ===
-    
-    -- 1. 列幅の計算
-    local max_name_w = 4 -- "NAME" の長さ
-    local max_type_w = 4 -- "TYPE" の長さ
+    -- 1. Calculate column widths (default min widths)
+    local max_name_w = 4 -- Length of "NAME"
+    local max_type_w = 4 -- Length of "TYPE"
     
     for _, v in ipairs(vars) do
         max_name_w = math.max(max_name_w, vim.fn.strdisplaywidth(v.name))
         max_type_w = math.max(max_type_w, vim.fn.strdisplaywidth(v.type))
     end
 
-    -- パディング関数
+    -- Padding function
     local function pad_str(s, w) 
         local vis_w = vim.fn.strdisplaywidth(s)
         return string.rep(" ", PADDING) .. s .. string.rep(" ", w - vis_w + PADDING)
@@ -309,14 +274,14 @@ function M.show_variables(vars)
 
     local fmt_lines = {}
     
-    -- ヘッダー作成
+    -- Create header
     local header = pad_str("NAME", max_name_w) .. SEPARATOR ..
                    pad_str("TYPE", max_type_w) .. SEPARATOR ..
                    pad_str("VALUE/INFO", 10)
     
     table.insert(fmt_lines, header)
     
-    -- 区切り線作成
+    -- Create separator line
     local sep_len_name = max_name_w + (PADDING * 2)
     local sep_len_type = max_type_w + (PADDING * 2)
     local sep_line = string.rep("─", sep_len_name) .. "─┼─" ..
@@ -325,17 +290,25 @@ function M.show_variables(vars)
     
     table.insert(fmt_lines, sep_line)
 
-    -- データ行作成
-    for _, v in ipairs(vars) do
-        local line = pad_str(v.name, max_name_w) .. SEPARATOR ..
-                     pad_str(v.type, max_type_w) .. SEPARATOR ..
-                     " " .. v.info 
+    -- Create data lines
+    if #vars == 0 then
+        -- Empty state: Show message in the VALUE/INFO column
+        local line = pad_str("", max_name_w) .. SEPARATOR ..
+                     pad_str("", max_type_w) .. SEPARATOR ..
+                     " (No variables defined)"
         table.insert(fmt_lines, line)
+    else
+        for _, v in ipairs(vars) do
+            local line = pad_str(v.name, max_name_w) .. SEPARATOR ..
+                         pad_str(v.type, max_type_w) .. SEPARATOR ..
+                         " " .. v.info 
+            table.insert(fmt_lines, line)
+        end
     end
 
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, fmt_lines)
 
-    -- ハイライト
+    -- Highlight
     vim.api.nvim_buf_add_highlight(buf, -1, "Title", 0, 0, -1)
     vim.api.nvim_buf_add_highlight(buf, -1, "Comment", 1, 0, -1)
     
@@ -343,13 +316,20 @@ function M.show_variables(vars)
     local col2_end = col1_end + 3 + sep_len_type
     
     for i = 2, #fmt_lines - 1 do
-        vim.api.nvim_buf_add_highlight(buf, -1, "Function", i, 0, col1_end)
-        vim.api.nvim_buf_add_highlight(buf, -1, "Type", i, col1_end + 3, col2_end)
-        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col1_end, col1_end + 3)
-        vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col2_end, col2_end + 3)
+        if #vars > 0 then
+            vim.api.nvim_buf_add_highlight(buf, -1, "Function", i, 0, col1_end)
+            vim.api.nvim_buf_add_highlight(buf, -1, "Type", i, col1_end + 3, col2_end)
+            vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col1_end, col1_end + 3)
+            vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col2_end, col2_end + 3)
+        else
+             -- Empty state highlight (Message in Comment color)
+             vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col1_end, col1_end + 3)
+             vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col2_end, col2_end + 3)
+             vim.api.nvim_buf_add_highlight(buf, -1, "Comment", i, col2_end + 3, -1)
+        end
     end
 
-    -- ウィンドウ設定
+    -- Window settings
     local editor_width = vim.o.columns
     local content_width = 0
     for _, line in ipairs(fmt_lines) do
@@ -375,7 +355,7 @@ function M.show_variables(vars)
     vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", ":close<CR>", opts)
 end
 
--- ★ 追加: プロファイリング結果表示
+-- Add: Show profiling results
 function M.show_profile_stats(text)
     local buf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
@@ -480,7 +460,7 @@ end
 function M.show_inspection(data)
     local buf = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
-    vim.api.nvim_buf_set_option(buf, 'filetype', 'python') -- シンタックスハイライト用
+    vim.api.nvim_buf_set_option(buf, 'filetype', 'python') -- For syntax highlighting
 
     local lines = {}
     local type_str = (data.type and data.type ~= vim.NIL) and data.type or "unknown"
@@ -495,7 +475,7 @@ function M.show_inspection(data)
     
     if data.docstring and data.docstring ~= vim.NIL then
         table.insert(lines, "## Docstring:")
-        -- docstringを行に分解して追加
+        -- Split docstring into lines and add
         for _, l in ipairs(vim.split(data.docstring, "\n")) do
             table.insert(lines, l)
         end
@@ -503,7 +483,7 @@ function M.show_inspection(data)
 
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
-    -- 大きめのウィンドウ
+    -- Large window
     local width = math.floor(vim.o.columns * 0.8)
     local height = math.floor(vim.o.lines * 0.8)
     local row = math.floor((vim.o.lines - height) / 2)
@@ -560,13 +540,13 @@ end
 
 function M.clear_repl()
     if State.buf.output and vim.api.nvim_buf_is_valid(State.buf.output) then
-        -- ターミナルバッファは set_lines で消せないので、
-        -- 強引だがバッファを再作成する
+        -- Terminal buffer cannot be cleared with set_lines,
+        -- so recreate the buffer (forcefully)
         vim.api.nvim_buf_delete(State.buf.output, { force = true })
         State.buf.output = nil
         State.term_chan = nil
         
-        -- 再描画（ウィンドウが開いていれば）
+        -- Redraw (if window is open)
         if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
             State.buf.output = M.get_or_create_buf("JovianConsole")
             vim.api.nvim_win_set_buf(State.win.output, State.buf.output)
@@ -575,7 +555,7 @@ function M.clear_repl()
     end
 end
 
--- ★ 追加: 診断クリア
+-- Add: Clear diagnostics
 function M.clear_diagnostics()
     local bufnr = vim.api.nvim_get_current_buf()
     vim.diagnostic.reset(State.diag_ns, bufnr)
