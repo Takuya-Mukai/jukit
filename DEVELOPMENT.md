@@ -1,79 +1,56 @@
-# Development Documentation
+# Development Guide for jovian.nvim
 
-This document outlines the architecture and technical details of `jovian.nvim`.
+This document provides an overview of the project structure and guidelines for contributing to `jovian.nvim`.
 
-## Architecture Overview
+## 📂 Project Structure
 
-`jovian.nvim` operates on a client-server model:
+The core logic is located in `lua/jovian/`:
 
-*   **Frontend (Lua):** Runs inside Neovim. Handles UI, user commands, and process management.
-*   **Backend (Python):** Runs as a separate process (IPython kernel). Executes code and manages state.
+- **`init.lua`**: The entry point. Handles `setup`, command registration, and autocmds.
+- **`core.lua`**: The brain of the plugin. Manages the Python kernel process, handles communication (sending code, receiving results), and orchestrates the overall logic.
+- **`ui.lua`**: Handles all UI elements.
+    - Manages Windows and Buffers (REPL, Preview, Vars Pane).
+    - **Extmark Management**: Handles the creation, deletion, and cleanup of virtual text (cell status).
+- **`utils.lua`**: Utility functions for text manipulation.
+    - Cell parsing (finding ranges).
+    - Cell operations (Delete, Move, Split).
+- **`config.lua`**: Defines default configuration options.
 
-Communication occurs via standard input/output (stdio) using newline-delimited JSON messages.
+### Key Concepts
 
-## Directory Structure
+- **Extmark Management**: Virtual text (e.g., "Done", "Running") is managed via a dedicated namespace (`State.status_ns`). Functions in `ui.lua` (`set_cell_status`, `clear_status_extmarks`) control this.
+- **Window Management**: Window IDs are stored in `State.win` (e.g., `State.win.output`, `State.win.variables`). We check `vim.api.nvim_win_is_valid` before accessing them.
 
-*   `lua/jovian/`
-    *   `init.lua`: Entry point. Registers user commands and autocommands.
-    *   `core.lua`: Core logic. Manages the Python kernel process, sends commands, and dispatches received messages.
-    *   `ui.lua`: UI management. Handles REPL/Preview windows, floating windows, and notifications.
-    *   `utils.lua`: Utility functions for cell parsing, ID generation, and buffer manipulation.
-    *   `config.lua`: Configuration management.
-    *   `state.lua`: Shared state (window IDs, buffer IDs, kernel job ID).
-    *   `backend/`: Python backend source code.
-        *   `main.py`: Entry point for the Python process.
-        *   `shell.py`: Wraps the IPython kernel (`InteractiveShell`).
-        *   `handlers.py`: Command handlers (variables, dataframes, inspection).
-        *   `protocol.py`: JSON communication protocol helpers.
+## 🤝 Contribution Guide
 
-## Technical Details
+### Adding New Cell Operations
 
-### Communication Protocol
+If you want to add a new cell operation (e.g., `JovianSplitCell`), follow these steps:
 
-Messages are JSON objects sent over stdio.
+1.  **Implement Logic in `utils.lua`**:
+    - Manipulate the buffer text using `vim.api.nvim_buf_set_lines`.
+    - **CRITICAL**: You **MUST** handle Extmark cleanup. If you move or delete lines that contain a cell header (`# %%`), the associated Extmarks might persist or become orphaned.
+    - Use `UI.clear_status_extmarks` or `UI.delete_status_extmark` to clean up before modifying text.
 
-*   **Lua -> Python:**
-    ```json
-    { "command": "execute", "code": "print('hello')", "cell_id": "cell_123" }
-    ```
-*   **Python -> Lua:**
-    ```json
-    { "type": "stream", "stream": "stdout", "text": "hello\n" }
-    { "type": "result_ready", "cell_id": "cell_123", "status": "ok" }
-    ```
+2.  **Register Command in `init.lua`**:
+    - Add a new user command that calls your utility function.
+    - **Trigger Structure Check**: Call `require("jovian.core").check_structure_change()` after the operation to ensure the plugin's internal state (cache) remains consistent.
 
-### JSON Buffering
+### Testing
 
-Since standard output may be chunked by the OS or buffers, a single JSON message might be split across multiple `on_stdout` callbacks in Lua.
+Tests are located in the `tests/` directory. They are simple Lua scripts that mock the Neovim API or run within a Neovim instance to verify functionality.
 
-*   **Implementation:** `lua/jovian/core.lua` (`on_stdout`)
-*   **Logic:**
-    1.  Incoming data chunks are appended to `State.stdout_buffer`.
-    2.  The buffer is split by newline characters.
-    3.  Complete lines are parsed as JSON.
-    4.  Incomplete lines (at the end of the chunk) remain in the buffer for the next callback.
+To run a verification script:
+```bash
+nvim -l tests/verify_command_cleanup.lua
+```
 
-### Window Management
+## ⚠️ Known Issues & Development Notes
 
-*   **REPL & Preview:** Managed in `lua/jovian/ui.lua`.
-    *   `M.open_windows()`: Creates splits for REPL and Preview.
-    *   **Focus Restoration:** Before opening or toggling windows, the current window ID is captured. After the operation, `vim.api.nvim_set_current_win` is used to restore focus to the code editor.
-*   **Floating Windows:** Used for `JovianVars`, `JovianPeek`, etc.
-    *   **Borders:** Configurable via `Config.options.float_border`. The value is passed directly to `vim.api.nvim_open_win`.
+### Virtual Text Stability (Undo/Redo)
 
-### Python Backend
+One of the challenges in this plugin is maintaining accurate virtual text (cell status) during complex edits and Undo/Redo operations.
 
-*   **IPython Integration:** Uses `IPython.core.interactiveshell.InteractiveShell` to execute code.
-*   **Output Capture:**
-    *   `sys.stdout` and `sys.stderr` are redirected to `protocol.StreamCapture`.
-    *   Captured output is sent to Lua as `stream` messages.
-*   **Matplotlib Integration:**
-    *   `plt.show()` is patched to save figures to a temporary directory.
-    *   The path to the saved image is sent to Lua, which can then display it (e.g., via `image.nvim` if integrated, or just a notification).
-
-### Localization
-
-The codebase is English-only.
-*   **Lua:** All user-facing strings (notifications, virtual text) and comments are in English.
-*   **Python:** All comments and error messages are in English.
-*   **Verification:** `grep` checks ensure no non-ASCII characters (excluding icons) remain in the source code.
+- **Debouncing**: We use a **debounced `TextChanged` listener** (in `init.lua` -> `core.lua`) to periodically scan the buffer and clean up invalid Extmarks.
+- **Atomic Operations**: When implementing move operations, we use `vim.api.nvim_buf_set_lines` in a single call (or grouped via `undojoin` previously) to ensure that Undo restores the buffer to a clean state.
+- **Explicit Cleanup**: Do not rely solely on Neovim's automatic Extmark movement. Explicitly clear status marks when logically removing a cell to prevent "ghost" marks.

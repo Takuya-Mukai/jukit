@@ -3,8 +3,9 @@ local M = {}
 M.defaults = {
 	-- UI
 	preview_width_percent = 35,
+	preview_width_percent = 35,
 	repl_height_percent = 30,
-    vars_pane_width = 40, -- Width of the variables pane (columns)
+    vars_pane_width_percent = 30, -- Width of the variables pane (percent of editor width)
     toggle_var = false, -- Automatically toggle variables pane with UI
 
 	-- Visuals

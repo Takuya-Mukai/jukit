@@ -832,9 +832,9 @@ function M.toggle_variables_pane()
     State.win.variables = vim.api.nvim_get_current_win()
     vim.api.nvim_win_set_buf(State.win.variables, State.buf.variables)
 
-    -- Apply Width
-    local target_width = Config.options.vars_pane_width
-    vim.api.nvim_win_set_width(State.win.variables, target_width)
+    -- Apply Width (Percent)
+    local width = math.floor(vim.o.columns * (Config.options.vars_pane_width_percent / 100))
+    vim.api.nvim_win_set_width(State.win.variables, width)
 
     -- Window Options
     local win = State.win.variables

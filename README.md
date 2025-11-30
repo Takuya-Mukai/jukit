@@ -1,104 +1,115 @@
-# Jovian.nvim
+# jovian.nvim
 
-A Neovim plugin for interactive Python programming, providing a Jupyter Notebook-like experience within Neovim. It allows executing code cells, inspecting variables, and visualizing data directly in the editor.
+**jovian.nvim** is a Neovim plugin designed to provide a Jupyter-like experience for editing Python files, specifically those using the "percent" format (`# %%`). It allows you to execute code cells, view markdown previews, monitor variables, and control the Jupyter kernel directly from Neovim.
 
-## Installation
+## ✨ Features
 
-Using [lazy.nvim](https://github.com/folke/lazy.nvim):
+- **Code Cell Execution**: Run individual cells or the entire file.
+- **Markdown Preview**: Live preview of markdown cells.
+- **Variables Pane**: Monitor active variables in a dedicated pane.
+- **Kernel Control**: Start, restart, and interrupt the Python kernel.
+- **Cell Management**: Move, delete, split, and merge cells easily.
+- **Virtual Text Status**: Visual indicators for cell status (`Running`, `Done`, `Error`).
+
+## 📦 Dependencies
+
+### Required
+- **Python Environment**: You only need `ipython` installed.
+  ```bash
+  pip install ipython
+  ```
+
+### Recommended
+- **[jupytext.nvim](https://github.com/GCBallesteros/jupytext.nvim)**: Highly recommended for seamless conversion between `.ipynb` files and the percent-formatted python files (`.py`) used by this plugin. It allows you to open `.ipynb` files directly as `.py` files in Neovim.
+
+### Important (For Image Support)
+- **[image.nvim](https://github.com/3rd/image.nvim)**: Required for displaying plots and images within Neovim.
+
+**Example configure `image.nvim` as follows:**
 
 ```lua
-{
-    "m-tky/jovian.nvim",
-    config = function()
-        require("jovian").setup({
-            -- Configuration options (see below)
-        })
-    end
-}
+require("image").setup({
+    backend = "kitty", -- it depends on your environment (e.g., "ueberzug")
+    processor = "magick_cli", -- it depends on your environment
+    max_width_window_percentage = 100,
+    max_height_window_percentage = 30,
+    window_overlap_clear_enabled = true,
+})
 ```
 
-## Configuration
+## ⚙️ Configuration
 
-The following table shows the default configuration options. You can override these by passing a table to the `setup` function.
+You can configure `jovian.nvim` by passing a table to the `setup` function.
 
 ```lua
 require("jovian").setup({
     -- UI Settings
     preview_width_percent = 35,
     repl_height_percent = 30,
+    vars_pane_width_percent = 20, -- Width of the variables pane (% of editor width)
+    toggle_var = false, -- If true, Vars pane opens/closes with JovianToggle/JovianOpen
 
     -- Visuals
     flash_highlight_group = "Visual",
     flash_duration = 300,
-    float_border = "rounded", -- Options: "single", "double", "rounded", "solid", "shadow", "none"
+    float_border = "rounded",
 
-    -- Python Environment
+    -- Python
     python_interpreter = "python3",
-
-    -- SSH Remote Settings (Optional)
-    ssh_host = nil, -- Example: "user@192.168.1.10"
-    ssh_python = "python3", -- Remote Python command
-
-    -- Behavior
-    notify_threshold = 10,
 })
 ```
 
-### `float_border`
+### Key Options
+- **`toggle_var`**: When set to `true`, the Variables Pane will automatically open and close alongside the REPL and Preview windows when you use `JovianToggle` or `JovianOpen`.
+- **`vars_pane_width_percent`**: Controls the width of the Variables Pane as a percentage of the total editor width.
 
-Controls the border style of floating windows (Variable List, Peek, Doc, etc.).
+## 🚀 Commands
 
-- **Default:** `"rounded"`
-- **Values:** `"single"`, `"double"`, `"rounded"`, `"solid"`, `"shadow"`, `"none"` (or any valid `nvim_open_win` border style).
+### UI & Layout
+- **`:JovianOpen`**: Open the Jovian UI (REPL, Preview, and optionally Vars Pane).
+- **`:JovianToggle`**: Toggle the visibility of the Jovian UI.
+- **`:JovianClear`**: Clear the REPL output.
+- **`:JovianToggleVars`**: Manually toggle the Variables Pane.
 
-## Commands
+### Execution
+- **`:JovianRun`**: Run the current cell.
+- **`:JovianRunAndNext`**: Run the current cell and move to the next one.
+- **`:JovianRunAll`**: Run all cells in the file.
+- **`:JovianRunLine`**: Run the current line.
+- **`:JovianSendSelection`**: Run the visually selected code.
 
-| Command                    | Description                                                             |
-| :------------------------- | :---------------------------------------------------------------------- |
-| **Execution**              |                                                                         |
-| `JovianStart`              | Starts the Python kernel.                                               |
-| `JovianRun`                | Executes the current cell.                                              |
-| `JovianSendSelection`      | Executes the selected text (Visual mode).                               |
-| `JovianRunAll`             | Executes all cells in the buffer.                                       |
-| `JovianRunAndNext`         | Executes the current cell and moves to the next one.                    |
-| `JovianRunLine`            | Executes the current line.                                              |
-| `JovianRestart`            | Restarts the Python kernel.                                             |
-| `JovianInterrupt`          | Interrupts the currently running execution.                             |
-| **UI & Windows**           |                                                                         |
-| `JovianOpen`               | Opens the REPL and Preview windows.                                     |
-| `JovianToggle`             | Toggles the visibility of the REPL and Preview windows.                 |
-| `JovianClear`              | Clears the REPL buffer.                                                 |
-| `JovianClearDiag`          | Clears Jovian diagnostics from the buffer.                              |
-| **Data & Inspection**      |                                                                         |
-| `JovianVars`               | Shows a list of defined variables in a floating window.                 |
-| `JovianView [name]`        | Displays a pandas DataFrame or similar object in a floating window.     |
-| `JovianPeek [name]`        | Shows a quick peek of a variable's value and type.                      |
-| `JovianDoc [name]`         | Shows documentation/inspection info for an object.                      |
-| `JovianCopy [name]`        | Copies the string representation of a variable to the system clipboard. |
-| `JovianProfile`            | Runs `cProfile` on the current cell and shows stats.                    |
-| **Navigation & Editing**   |                                                                         |
-| `JovianNextCell`           | Jumps to the next cell header.                                          |
-| `JovianPrevCell`           | Jumps to the previous cell header.                                      |
-| `JovianNewCellBelow`       | Inserts a new cell below the current one.                               |
-| `JovianNewCellAbove`       | Inserts a new cell above the current one.                               |
-| `JovianDeleteCell`         | Deletes the current cell.                                               |
-| `JovianSplitCell`          | Splits the current cell at the cursor position.                         |
-| `JovianMergeBelow`         | Merges the current cell with the one below it.                          |
-| `JovianMoveCellUp`         | Moves the current cell up.                                              |
-| `JovianMoveCellDown`       | Moves the current cell down.                                            |
-| **Session**                |                                                                         |
-| `JovianSaveSession [file]` | Saves the current kernel session (variables) to a file.                 |
-| `JovianLoadSession [file]` | Loads a kernel session from a file.                                     |
-| **Maintenance**            |                                                                         |
-| `JovianClean`              | Cleans up stale cache files for the current buffer.                     |
+### Kernel Control
+- **`:JovianStart`**: Start the kernel manually.
+- **`:JovianRestart`**: Restart the kernel.
+- **`:JovianInterrupt`**: Interrupt the current execution.
 
-## Keymaps
+### Cell Management
+- **`:JovianNextCell` / `:JovianPrevCell`**: Navigate between cells.
+- **`:JovianNewCellAbove` / `:JovianNewCellBelow`**: Insert a new cell.
+- **`:JovianDeleteCell`**: Delete the current cell.
+- **`:JovianMoveCellUp` / `:JovianMoveCellDown`**: Move the current cell up or down.
+- **`:JovianMergeBelow`**: Merge the current cell with the one below.
+- **`:JovianSplitCell`**: Split the current cell at the cursor.
 
-Jovian does not set default keymaps to avoid conflicts. You can define your own in your Neovim configuration. Example:
+### Data & Inspection
+- **`:JovianVars`**: Show variables in a floating window (or update the persistent pane).
+- **`:JovianView [df]`**: View a pandas DataFrame or variable in a floating window.
+- **`:JovianCopy [var]`**: Copy a variable's value to the clipboard.
+- **`:JovianDoc [obj]`**: Inspect an object (docstring, definition).
+- **`:JovianPeek [obj]`**: Peek at an object's value/info.
 
-```lua
-vim.keymap.set("n", "<leader>jr", "<cmd>JovianRun<CR>", { desc = "Run Cell" })
-vim.keymap.set("n", "<leader>ji", "<cmd>JovianInterrupt<CR>", { desc = "Interrupt Kernel" })
-vim.keymap.set("n", "<leader>jv", "<cmd>JovianVars<CR>", { desc = "Variables" })
--- Add more as needed
-```
+## 🖥️ UI Layout
+
+The Jovian UI is designed to maximize coding efficiency:
+
+1.  **REPL Window**: Opens at the bottom of the screen (`belowright split`).
+2.  **Preview Window**: Opens to the right (`vsplit`), displaying rendered markdown.
+3.  **Variables Pane**: Opens as a **vertical split to the right of the REPL**. This allows you to keep an eye on your data without obscuring your code or output.
+
+### Virtual Text Status
+Cells display their execution status using virtual text on the header line (`# %%`):
+- **Running**: Indicates the cell is currently executing.
+- **Done**: Indicates execution completed successfully.
+- **Error**: Indicates an error occurred.
+
+**Stability**: The virtual text system is robust and handles **Undo/Redo** operations gracefully. If you move or delete cells and then undo, the status indicators will be correctly restored or cleared.
