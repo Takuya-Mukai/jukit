@@ -45,6 +45,15 @@ local function insert_cell_below()
 	vim.cmd("startinsert")
 end
 
+local function insert_markdown_cell_below()
+	local _, e = Utils.get_cell_range()
+	local new_id = Utils.generate_id()
+	local lines = { "", '# %% [markdown] id="' .. new_id .. '"', "" }
+	vim.api.nvim_buf_set_lines(0, e, e, false, lines)
+	vim.api.nvim_win_set_cursor(0, { e + 3, 0 })
+	vim.cmd("startinsert")
+end
+
 local function insert_cell_above()
 	local s, _ = Utils.get_cell_range()
 	local new_id = Utils.generate_id()
@@ -217,6 +226,7 @@ end, { nargs = "?" })
 	vim.api.nvim_create_user_command("JovianNextCell", goto_next_cell, {})
 	vim.api.nvim_create_user_command("JovianPrevCell", goto_prev_cell, {})
 	vim.api.nvim_create_user_command("JovianNewCellBelow", insert_cell_below, {})
+    vim.api.nvim_create_user_command("JovianNewMarkdownCellBelow", insert_markdown_cell_below, {})
 	vim.api.nvim_create_user_command("JovianNewCellAbove", insert_cell_above, {})
 	vim.api.nvim_create_user_command("JovianMergeBelow", merge_cell_below, {})
 

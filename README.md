@@ -114,6 +114,7 @@ require("jovian").setup({
 ### Cell Management
 - **`:JovianNextCell` / `:JovianPrevCell`**: Navigate between cells.
 - **`:JovianNewCellAbove` / `:JovianNewCellBelow`**: Insert a new cell.
+- **`:JovianNewMarkdownCellBelow`**: Insert a new markdown cell below.
 - **`:JovianDeleteCell`**: Delete the current cell.
 - **`:JovianMoveCellUp` / `:JovianMoveCellDown`**: Move the current cell up or down.
 - **`:JovianMergeBelow`**: Merge the current cell with the one below.
