@@ -87,6 +87,10 @@ function M.setup(opts)
         local args = vim.split(opts.args, " ")
         
         local function process_add(name, host, python)
+            if Hosts.exists(name) then
+                vim.notify("Host '" .. name .. "' already exists. Use a different name.", vim.log.levels.ERROR)
+                return
+            end
             vim.cmd("redraw")
             local config = { type = "ssh", host = host, python = python }
             local ok, err = Hosts.validate_connection(config)
@@ -101,6 +105,10 @@ function M.setup(opts)
             -- Interactive mode
             vim.ui.input({ prompt = "Host Name (e.g., my-server): " }, function(name)
                 if not name or name == "" then return end
+                if Hosts.exists(name) then
+                    vim.notify("Host '" .. name .. "' already exists.", vim.log.levels.ERROR)
+                    return
+                end
                 vim.ui.input({ prompt = "SSH Host (e.g., user@1.2.3.4): " }, function(host)
                     if not host or host == "" then return end
                     vim.ui.input({ prompt = "Remote Python Path (e.g., /usr/bin/python3): " }, function(python)
@@ -118,6 +126,10 @@ function M.setup(opts)
         local args = vim.split(opts.args, " ")
 
         local function process_add(name, python)
+            if Hosts.exists(name) then
+                vim.notify("Host '" .. name .. "' already exists. Use a different name.", vim.log.levels.ERROR)
+                return
+            end
             vim.cmd("redraw")
             local config = { type = "local", python = python }
             local ok, err = Hosts.validate_connection(config)
@@ -132,6 +144,10 @@ function M.setup(opts)
             -- Interactive mode
             vim.ui.input({ prompt = "Config Name (e.g., project-venv): " }, function(name)
                 if not name or name == "" then return end
+                if Hosts.exists(name) then
+                    vim.notify("Host '" .. name .. "' already exists.", vim.log.levels.ERROR)
+                    return
+                end
                 vim.ui.input({ prompt = "Local Python Path (e.g., ./venv/bin/python): ", default = Config.options.python_interpreter }, function(python)
                     if not python or python == "" then return end
                     process_add(name, python)
@@ -164,7 +180,12 @@ vim.api.nvim_create_user_command("JovianRemoveHost", function(opts)
     if name == "" then
         -- Interactive selection
         local data = Hosts.load_hosts()
-        local names = vim.tbl_keys(data.configs)
+        local names = {}
+        for name, _ in pairs(data.configs) do
+            if name ~= "local_default" then
+                table.insert(names, name)
+            end
+        end
         table.sort(names)
         vim.ui.select(names, { prompt = "Remove Host:" }, function(selected)
             if selected then

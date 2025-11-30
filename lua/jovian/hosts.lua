@@ -31,6 +31,11 @@ function M.save_hosts(data)
     vim.fn.writefile({content}, M.hosts_file)
 end
 
+function M.exists(name)
+    local data = M.load_hosts()
+    return data.configs[name] ~= nil
+end
+
 function M.add_host(name, config)
     local data = M.load_hosts()
     data.configs[name] = config
