@@ -204,6 +204,9 @@ function M.open_windows(target_win)
             M.toggle_variables_pane()
         end
     end
+
+    -- Trigger preview check immediately
+    require("jovian.core").check_cursor_cell()
 end
 
 function M.close_windows()
