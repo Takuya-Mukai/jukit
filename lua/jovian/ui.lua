@@ -235,6 +235,10 @@ function M.open_markdown_preview(filepath)
 	if not (State.win.preview and vim.api.nvim_win_is_valid(State.win.preview)) then
 		return
 	end
+
+	-- Capture the old buffer *before* switching
+	local old_buf = vim.api.nvim_win_get_buf(State.win.preview)
+
 	local abs_filepath = vim.fn.fnamemodify(filepath, ":p")
 	local file_dir = vim.fn.fnamemodify(abs_filepath, ":h")
 	State.current_preview_file = abs_filepath
@@ -242,9 +246,27 @@ function M.open_markdown_preview(filepath)
 	vim.api.nvim_set_current_win(State.win.preview)
 	vim.cmd("lcd " .. file_dir)
 	vim.cmd("edit! " .. abs_filepath)
+	
+	-- Set read-only and non-modifiable
 	vim.bo.filetype = "markdown"
-	vim.bo.buftype = ""
+	vim.bo.buftype = "nofile" -- Changed from "" to "nofile" to prevent "E37: No write since last change" if we modify it (though we set it nomodifiable) and to keep it out of swap
+    -- Actually, if it's a real file we want to read it. "nofile" means it's not associated with a file.
+    -- But we ARE reading a file.
+    -- Let's keep buftype="" (normal) but set readonly/nomodifiable.
+    vim.bo.buftype = "" 
+	vim.bo.modifiable = false
+	vim.bo.readonly = true
+	
 	vim.wo.wrap = true
+
+    -- Cleanup old buffer if it's different and valid
+    local new_buf = vim.api.nvim_get_current_buf()
+    if old_buf and old_buf ~= new_buf and vim.api.nvim_buf_is_valid(old_buf) then
+        -- Check if it was a jovian preview buffer (optional, but safer)
+        -- For now, we assume anything in the preview window was a preview buffer.
+        vim.api.nvim_buf_delete(old_buf, { force = true })
+    end
+
 	vim.schedule(function()
 		if vim.api.nvim_win_is_valid(cur_win) then
 			vim.api.nvim_set_current_win(cur_win)

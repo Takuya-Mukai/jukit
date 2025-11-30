@@ -185,6 +185,14 @@ function M.setup(opts)
 			end
 		end,
 	})
+
+    -- Add: Clean stale cache on save
+    vim.api.nvim_create_autocmd("BufWritePost", {
+        pattern = "*.py",
+        callback = function()
+            Core.clean_stale_cache()
+        end,
+    })
 end
 
 return M
