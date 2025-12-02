@@ -145,7 +145,7 @@ Cells display their execution status using virtual text on the header line (`# %
 
 ## 🙏 Acknowledgements
 
-This plugin is heavily inspired by **[vim-jukit](https://github.com/luk400/vim-jukit)**. We are grateful for the following concepts and implementations that served as a reference:
+This plugin is heavily inspired by **[vim-jukit](https://github.com/luk400/vim-jukit)**. I am grateful for the following concepts and implementations that served as a reference:
 
 - **Architecture**: The core design of separating the Neovim frontend from a Python backend that manages the IPython kernel.
 - **Output Capture**: The technique of monkey-patching `sys.stdout` and `sys.stderr` to capture and redirect execution output back to Neovim.
