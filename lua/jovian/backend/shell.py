@@ -9,7 +9,7 @@ import traceback
 
 import matplotlib
 
-matplotlib.use("Agg")
+# matplotlib.use("Agg") -- Removed to allow window mode
 import matplotlib.pyplot as plt
 
 try:
@@ -31,6 +31,7 @@ class JovianShell:
         self.current_file_dir = None
         self.output_counter = 0
         self.output_queue = []
+        self.plot_mode = "inline" # "inline" or "window"
 
         self.original_stdout = sys.stdout
         self.original_stderr = sys.stderr
@@ -98,7 +99,13 @@ class JovianShell:
             os.makedirs(save_dir, exist_ok=True)
             return save_dir
 
+    def set_plot_mode(self, mode):
+        self.plot_mode = mode
+
     def _custom_show(self, *args, **kwargs):
+        if self.plot_mode == "window":
+            return self._original_show(*args, **kwargs)
+
         self._sync_queue()
         save_dir = self._ensure_save_dir()
         filename = f"{self.current_cell_id}_{self.output_counter:02d}.png"

@@ -73,6 +73,7 @@ require("jovian").setup({
     -- Behavior
     notify_threshold = 10,
     notify_mode = "all", -- "all", "error", "none"
+    plot_view_mode = "inline", -- "inline", "window"
 
     -- Magic Commands
     suppress_magic_command_errors = true, -- Suppress LSP errors for magic commands
@@ -116,6 +117,7 @@ require("jovian").setup({
 - **`:JovianToggle`**: Toggle the visibility of the Jovian UI.
 - **`:JovianClear`**: Clear the REPL output.
 - **`:JovianToggleVars`**: Manually toggle the Variables Pane.
+- **`:JovianTogglePlot`**: Toggle between inline and window plot view modes.
 
 ### Execution
 - **`:JovianRun`**: Run the current cell.

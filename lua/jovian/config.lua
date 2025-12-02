@@ -18,6 +18,7 @@ M.defaults = {
 	-- Behavior
 	notify_threshold = 2,
     notify_mode = "all", -- "all", "error", "none"
+    plot_view_mode = "inline", -- "inline", "window"
     
     -- UI Symbols
     ui_symbols = {

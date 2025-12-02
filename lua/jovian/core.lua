@@ -628,4 +628,19 @@ vim.schedule(function()
     end
 end)
 
+function M.toggle_plot_view()
+    if not State.job_id then
+        return vim.notify("Kernel not started", vim.log.levels.WARN)
+    end
+    
+    local current = Config.options.plot_view_mode
+    local new_mode = current == "inline" and "window" or "inline"
+    Config.options.plot_view_mode = new_mode
+    
+    local msg = vim.fn.json_encode({ command = "set_plot_mode", mode = new_mode })
+    vim.fn.chansend(State.job_id, msg .. "\n")
+    
+    vim.notify("Plot View Mode: " .. new_mode, vim.log.levels.INFO)
+end
+
 return M

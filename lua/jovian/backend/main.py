@@ -42,6 +42,8 @@ def main():
                 handlers.inspect_object(kernel.shell, cmd["name"])
             elif cmd.get("command") == "peek":
                 handlers.peek_object(kernel.shell, cmd["name"])
+            elif cmd.get("command") == "set_plot_mode":
+                kernel.set_plot_mode(cmd.get("mode", "inline"))
             elif cmd.get("command") == "input_reply":
                 pass
         except (json.JSONDecodeError, KeyboardInterrupt):

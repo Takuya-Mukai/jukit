@@ -287,6 +287,9 @@ end, { nargs = "?" })
 	vim.api.nvim_create_user_command("JovianPeek", function(opts)
 		require("jovian.core").peek_symbol(opts)
 	end, { nargs = "?" })
+    vim.api.nvim_create_user_command("JovianTogglePlot", function()
+        require("jovian.core").toggle_plot_view()
+    end, {})
 
 	-- Cell Editing
 	vim.api.nvim_create_user_command("JovianDeleteCell", function()
