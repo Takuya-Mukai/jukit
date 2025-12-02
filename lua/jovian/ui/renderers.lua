@@ -355,9 +355,19 @@ function M.show_inspection(data)
 
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 
-	-- Large window
-	local width = math.floor(vim.o.columns * 0.8)
-	local height = math.floor(vim.o.lines * 0.8)
+	-- Calculate size based on content
+	local content_width = 0
+	for _, l in ipairs(lines) do
+		content_width = math.max(content_width, vim.fn.strdisplaywidth(l))
+	end
+
+	local width = math.min(content_width + 4, math.floor(vim.o.columns * 0.8))
+	local height = math.min(#lines + 2, math.floor(vim.o.lines * 0.8))
+	
+	-- Ensure minimum size
+	width = math.max(width, 40)
+	height = math.max(height, 5)
+
 	local row = math.floor((vim.o.lines - height) / 2)
 	local col = math.floor((vim.o.columns - width) / 2)
 

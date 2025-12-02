@@ -6,12 +6,16 @@ This document provides an overview of the project structure and guidelines for c
 
 The core logic is located in `lua/jovian/`:
 
-- **`init.lua`**: The entry point. Handles `setup`, command registration, and autocmds.
-- **`core.lua`**: The brain of the plugin. Manages the Python kernel process, handles communication (sending code, receiving results), and orchestrates the overall logic.
+- **`init.lua`**: The entry point. Handles `setup` and delegates command registration.
+- **`commands.lua`**: Contains all user command definitions (`JovianRun`, `JovianToggle`, etc.).
+- **`core.lua`**: The brain of the plugin. Manages the Python kernel process and orchestrates logic.
+- **`handlers.lua`**: Contains handler functions for processing messages received from the Python kernel.
 - **`hosts.lua`**: Manages host configurations (Local/SSH), persistence, and validation.
-- **`ui.lua`**: Handles all UI elements.
-    - Manages Windows and Buffers (REPL, Preview, Vars Pane).
-    - **Extmark Management**: Handles the creation, deletion, and cleanup of virtual text (cell status).
+- **`ui.lua`**: The main UI module. Acts as a facade for UI submodules.
+    - **`ui/windows.lua`**: Manages Windows and Buffers (REPL, Preview, Vars Pane).
+    - **`ui/renderers.lua`**: Handles rendering of content (Variables, Dataframes).
+    - **`ui/virtual_text.lua`**: Manages virtual text and extmarks.
+    - **`ui/shared.lua`**: Shared UI utilities to avoid circular dependencies.
 - **`utils.lua`**: Utility functions for text manipulation.
     - Cell parsing (finding ranges).
     - Cell operations (Delete, Move, Split).

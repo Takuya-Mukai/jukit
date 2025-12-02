@@ -141,7 +141,7 @@ require("jovian").setup({
 - **`:JovianSplitCell`**: Split the current cell at the cursor.
 
 ### Data & Inspection
-- **`:JovianVars`**: Show variables in a floating window (or update the persistent pane).
+- **`:JovianVars`**: Show variables in a floating window (forces float even if pane is open).
 - **`:JovianView [df]`**: View a pandas DataFrame or variable in a floating window.
 - **`:JovianCopy [var]`**: Copy a variable's value to the clipboard.
 - **`:JovianDoc [obj]`**: Inspect an object (docstring, definition).
