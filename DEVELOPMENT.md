@@ -16,11 +16,18 @@ The core logic is located in `lua/jovian/`:
     - Cell parsing (finding ranges).
     - Cell operations (Delete, Move, Split).
 - **`config.lua`**: Defines default configuration options.
+- **`diagnostics.lua`**: Handles LSP diagnostic filtering (suppressing errors for magic commands).
+- **`jovian_queries/`**: Contains custom TreeSitter queries for syntax highlighting (injections and highlights).
 
 ### Key Concepts
 
 - **Extmark Management**: Virtual text (e.g., "Done", "Running") is managed via a dedicated namespace (`State.status_ns`). Functions in `ui.lua` (`set_cell_status`, `clear_status_extmarks`) control this.
 - **Window Management**: Window IDs are stored in `State.win` (e.g., `State.win.output`, `State.win.variables`). We check `vim.api.nvim_win_is_valid` before accessing them.
+- **Magic Command Handling**:
+    - **LSP Suppression**: `diagnostics.lua` intercepts `textDocument/publishDiagnostics` from the LSP client. It filters out Syntax Errors on lines starting with `%` or `!`.
+    - **TreeSitter Highlighting**: We use custom queries in `jovian_queries/` to highlight magic commands.
+        - A custom predicate `#same-line?` is registered in `init.lua` to handle fragmented nodes (e.g., `!ls --color=always`).
+        - We use `priority` 105 to ensure our highlights override the default Python highlights.
 
 ## 🤝 Contribution Guide
 

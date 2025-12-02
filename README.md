@@ -11,6 +11,7 @@
 - **Cell Management**: Move, delete, split, and merge cells easily.
 - **Virtual Text Status**: Visual indicators for cell status (`Running`, `Done`, `Error`).
 - **Kernel Selection**: Switch between local and remote (SSH) Python kernels dynamically.
+- **Magic Command Support**: Syntax highlighting and error suppression for IPython magic commands (`%timeit`, `!ls`, etc.).
 
 ## 📦 Dependencies
 
@@ -65,6 +66,15 @@ require("jovian").setup({
 
     -- Python
     python_interpreter = "python3",
+
+    -- Magic Commands
+    suppress_magic_command_errors = true, -- Suppress LSP errors for magic commands
+
+    -- TreeSitter
+    treesitter = {
+        markdown_injection = true, -- Highlight markdown cells
+        magic_command_highlight = true, -- Highlight magic commands
+    },
 })
 ```
 

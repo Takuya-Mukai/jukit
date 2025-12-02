@@ -82,6 +82,44 @@ end
 
 function M.setup(opts)
 	Config.setup(opts)
+    require("jovian.diagnostics").setup()
+
+    -- TreeSitter Queries
+    local plugin_root = debug.getinfo(1).source:sub(2):match("(.*/)") .. "../.."
+    local queries_path = plugin_root .. "/jovian_queries"
+    
+    -- If using a package manager, the path might be different, but usually relative to init.lua works.
+    -- A more robust way is to find where the plugin is installed.
+    -- However, since we are moving files, we can just assume standard structure.
+    
+    -- Actually, a better way is to use vim.api.nvim_get_runtime_file if we want to be safe, 
+    -- but we are adding TO the runtime path.
+    
+    -- Let's try to find the directory relative to this file.
+    -- This file is lua/jovian/init.lua.
+    -- We want jovian_queries/.
+    
+    -- If installed via lazy/packer, it's in the root of the repo.
+    
+    if Config.options.treesitter.markdown_injection or Config.options.treesitter.magic_command_highlight then
+        vim.opt.rtp:prepend(queries_path)
+        
+        -- Register custom predicate for magic command highlighting
+        local ok, err = pcall(function()
+            vim.treesitter.query.add_predicate("same-line?", function(match, pattern, bufnr, predicate)
+                local node1 = match[predicate[2]]
+                local node2 = match[predicate[3]]
+                if not node1 or not node2 then return false end
+                
+                if type(node1) == "table" then node1 = node1[1] end
+                if type(node2) == "table" then node2 = node2[1] end
+                
+                local r1, _, _, _ = node1:range()
+                local r2, _, _, _ = node2:range()
+                return r1 == r2
+            end, true) -- force=true to overwrite if exists
+        end)
+    end
 
 	-- Execution
 	vim.api.nvim_create_user_command("JovianStart", Core.start_kernel, {})

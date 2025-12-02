@@ -25,6 +25,15 @@ M.defaults = {
         error = "✘ Error",
         interrupted = " Interrupted",
     },
+
+    -- Magic Commands
+    suppress_magic_command_errors = true,
+
+    -- TreeSitter
+    treesitter = {
+        markdown_injection = true,
+        magic_command_highlight = true,
+    },
 }
 
 M.options = vim.deepcopy(M.defaults)
