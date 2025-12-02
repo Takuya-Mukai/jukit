@@ -16,7 +16,8 @@ M.defaults = {
 	python_interpreter = "python3",
 
 	-- Behavior
-	notify_threshold = 10,
+	notify_threshold = 2,
+    notify_mode = "all", -- "all", "error", "none"
     
     -- UI Symbols
     ui_symbols = {

@@ -102,12 +102,13 @@ local function on_stdout(chan_id, data, name)
 						if target_buf and vim.api.nvim_buf_is_valid(target_buf) then
 							local start_t = State.cell_start_time[msg.cell_id]
 							if start_t and (os.time() - start_t) >= Config.options.notify_threshold then
-								UI.send_notification("Calculation " .. msg.cell_id .. " Finished!")
+								UI.send_notification("Calculation " .. msg.cell_id .. " Finished!", "info")
 							end
 							vim.api.nvim_buf_clear_namespace(target_buf, State.diag_ns, 0, -1)
 
 							-- Fix: Check status field as well
 							if msg.error or msg.status == "error" then
+                                UI.send_notification("Error in cell " .. msg.cell_id, "error")
 								UI.set_cell_status(target_buf, msg.cell_id, "error", Config.options.ui_symbols.error)
 
 								-- Show diagnostics if error info exists

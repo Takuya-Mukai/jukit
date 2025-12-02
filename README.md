@@ -22,6 +22,9 @@
   ```
 
 ### Recommended
+- **System Notification** (Optional, for desktop notifications):
+    - **Linux**: `libnotify` (provides `notify-send`).
+    - **macOS**: `osascript` (usually pre-installed).
 - **[jupytext.nvim](https://github.com/GCBallesteros/jupytext.nvim)**: Highly recommended for seamless conversion between `.ipynb` files and the percent-formatted python files (`.py`) used by this plugin. It allows you to open `.ipynb` files directly as `.py` files in Neovim.
 
 ### Important (For Image Support)
@@ -66,6 +69,10 @@ require("jovian").setup({
 
     -- Python
     python_interpreter = "python3",
+
+    -- Behavior
+    notify_threshold = 10,
+    notify_mode = "all", -- "all", "error", "none"
 
     -- Magic Commands
     suppress_magic_command_errors = true, -- Suppress LSP errors for magic commands

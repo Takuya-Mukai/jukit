@@ -2,7 +2,13 @@ local M = {}
 local Config = require("jovian.config")
 local State = require("jovian.state")
 
-function M.send_notification(msg)
+function M.send_notification(msg, level)
+    level = level or "info"
+    local mode = Config.options.notify_mode
+    
+    if mode == "none" then return end
+    if mode == "error" and level ~= "error" then return end
+
 	if vim.fn.executable("notify-send") == 1 then
 		vim.fn.jobstart({ "notify-send", "Jovian Task Finished", msg }, { detach = true })
 	elseif vim.fn.executable("osascript") == 1 then
@@ -11,7 +17,8 @@ function M.send_notification(msg)
 			{ detach = true }
 		)
 	else
-		vim.notify(msg, vim.log.levels.INFO)
+        local log_level = level == "error" and vim.log.levels.ERROR or vim.log.levels.INFO
+		vim.notify(msg, log_level)
 	end
 end
 

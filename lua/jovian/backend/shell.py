@@ -212,6 +212,12 @@ class JovianShell:
                             images[os.path.basename(item["path"])] = b64
                     except: pass
 
+            if not result.success and not error_info:
+                error_info = {
+                    "line": 1,
+                    "msg": "Error: Execution failed (Unknown cause)",
+                }
+
             status = "error" if error_info else "ok"
             msg = {
                 "type": "result_ready",
