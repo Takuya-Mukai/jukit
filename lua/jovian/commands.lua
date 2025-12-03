@@ -280,6 +280,11 @@ function M.setup()
     vim.api.nvim_create_user_command("JovianClearAllCache", function()
         require("jovian.core").clear_all_cache()
     end, {})
+
+    vim.api.nvim_create_user_command("JovianCleanCache", function()
+        require("jovian.core").clean_orphaned_caches()
+        vim.notify("Cleaned orphaned caches", vim.log.levels.INFO)
+    end, {})
 end
 
 return M

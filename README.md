@@ -90,6 +90,8 @@ require("jovian").setup({
 
 `jovian.nvim` creates a hidden directory named `.jovian_cache` in **the same directory as the file you are editing**. This directory stores intermediate files and metadata.
 
+**Automatic Cleanup**: The plugin automatically removes cache directories for files that no longer exist when you open or close Neovim. You can also trigger this manually with `:JovianCleanCache`.
+
 **Recommendation**: Add this directory to your `.gitignore` (globally or per-project) to keep your repository clean.
 
 ```gitignore
@@ -146,6 +148,7 @@ require("jovian").setup({
 - **`:JovianCopy [var]`**: Copy a variable's value to the clipboard.
 - **`:JovianDoc [obj]`**: Inspect an object (docstring, definition).
 - **`:JovianPeek [obj]`**: Peek at an object's value/info.
+- **`:JovianCleanCache`**: Manually clean up orphaned cache directories.
 
 ## 🖥️ UI Layout
 

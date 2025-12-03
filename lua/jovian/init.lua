@@ -98,6 +98,24 @@ function M.setup(opts)
             Core.schedule_structure_check()
         end,
     })
+
+    -- Add: Clean orphaned caches on open and close
+    vim.api.nvim_create_autocmd({ "VimEnter", "VimLeavePre" }, {
+        pattern = "*",
+        callback = function()
+            -- Run for the current working directory
+            Core.clean_orphaned_caches(vim.fn.getcwd())
+            
+            -- Also run for the directory of the current file if it's different
+            local buf_name = vim.api.nvim_buf_get_name(0)
+            if buf_name ~= "" then
+                local buf_dir = vim.fn.fnamemodify(buf_name, ":p:h")
+                if buf_dir ~= vim.fn.getcwd() then
+                    Core.clean_orphaned_caches(buf_dir)
+                end
+            end
+        end,
+    })
 end
 
 return M

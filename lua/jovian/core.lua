@@ -529,6 +529,36 @@ function M.peek_symbol(args)
 end
 
 -- Add: Structure Check
+function M.clean_orphaned_caches(dir)
+    dir = dir or vim.fn.getcwd()
+    local cache_root = dir .. "/.jovian_cache"
+    
+    if vim.fn.isdirectory(cache_root) == 0 then
+        return
+    end
+    
+    -- Iterate over directories in .jovian_cache
+    local scanner = vim.loop.fs_scandir(cache_root)
+    if scanner then
+        while true do
+            local name, type = vim.loop.fs_scandir_next(scanner)
+            if not name then break end
+            
+            if type == "directory" then
+                -- Check if the corresponding source file exists
+                -- The cache directory name is the filename (e.g., "script.py")
+                local source_file = dir .. "/" .. name
+                if vim.fn.filereadable(source_file) == 0 then
+                    -- Source file missing, delete cache
+                    local cache_path = cache_root .. "/" .. name
+                    vim.fn.delete(cache_path, "rf")
+                    -- vim.notify("Cleaned orphaned cache: " .. name, vim.log.levels.INFO)
+                end
+            end
+        end
+    end
+end
+
 function M.check_structure_change()
     local bufnr = vim.api.nvim_get_current_buf()
     UI.clean_invalid_extmarks(bufnr)

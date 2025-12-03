@@ -32,6 +32,9 @@ The core logic is located in `lua/jovian/`:
     - **TreeSitter Highlighting**: We use custom queries in `jovian_queries/` to highlight magic commands.
         - A custom predicate `#same-line?` is registered in `init.lua` to handle fragmented nodes (e.g., `!ls --color=always`).
         - We use `priority` 105 to ensure our highlights override the default Python highlights.
+- **Cache Management**:
+    - Cache is stored in `.jovian_cache/` relative to the source file.
+    - **Orphaned Cache Cleanup**: `core.lua` contains `clean_orphaned_caches` which scans the cache directory and removes subdirectories corresponding to missing source files. This is triggered on `VimEnter`, `VimLeavePre`, and via `:JovianCleanCache`.
 
 ## 🤝 Contribution Guide
 
