@@ -16,7 +16,8 @@ def send_json(msg):
 # --- Kernel Bridge ---
 class KernelBridge:
     def __init__(self):
-        self.km = KernelManager(kernel_name="python3")
+        # Use the same python interpreter as the bridge
+        self.km = KernelManager(kernel_cmd=[sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}"])
         self.kc = None
         self.running = False
         self.msg_queue = queue.Queue()
@@ -101,6 +102,10 @@ class KernelBridge:
                     # Handle peek data
                     peek_data = data['application/vnd.jovian.peek+json']
                     send_json({"type": "peek_data", "data": peek_data})
+                elif 'application/vnd.jovian.clipboard+json' in data:
+                    # Handle clipboard data
+                    clip_data = data['application/vnd.jovian.clipboard+json']
+                    send_json({"type": "clipboard_data", "content": clip_data["content"]})
                 elif 'image/png' in data:
                     self.msg_queue.put({"type": "image", "data": data['image/png']})
                 elif 'text/plain' in data:
@@ -150,6 +155,9 @@ class KernelBridge:
                 elif 'application/vnd.jovian.peek+json' in data:
                     peek_data = content['data']['application/vnd.jovian.peek+json']
                     send_json({"type": "peek_data", "data": peek_data})
+                elif 'application/vnd.jovian.clipboard+json' in data:
+                    clip_data = data['application/vnd.jovian.clipboard+json']
+                    send_json({"type": "clipboard_data", "content": clip_data["content"]})
              elif msg_type == 'status' and content['execution_state'] == 'idle':
                  self.var_msg_id = None
 
@@ -329,6 +337,7 @@ _jovian_get_variables()
         self.var_msg_id = self.kc.execute(script, silent=True)
 
     def view_dataframe(self, name):
+        # sys.stderr.write(f"DEBUG: view_dataframe {name}\n")
         script = f"""
 import pandas as pd
 import numpy as np
@@ -362,9 +371,10 @@ def _jovian_view_df(name):
 
 _jovian_view_df("{name}")
 """
-        self.kc.execute(script, silent=True)
+        self.var_msg_id = self.kc.execute(script, silent=True)
 
     def peek(self, name):
+        # sys.stderr.write(f"DEBUG: peek {name}\n")
         script = f"""
 import sys
 from IPython.display import display
@@ -372,7 +382,6 @@ from IPython.display import display
 def _jovian_peek(name):
     try:
         if name not in globals():
-            # Error case
             return
             
         val = globals()[name]
@@ -405,38 +414,59 @@ def _jovian_peek(name):
 
 _jovian_peek("{name}")
 """
-        self.kc.execute(script, silent=True)
+        self.var_msg_id = self.kc.execute(script, silent=True)
 
     def inspect(self, name):
         # Use Jupyter's inspect
+        # sys.stderr.write(f"DEBUG: Inspecting {name}\n")
         msg_id = self.kc.inspect(name, cursor_pos=len(name))
-        # We need to handle the reply. 
-        # Since inspect is blocking/async, we can wait for it here in a separate thread or just poll?
-        # But we are in the main loop.
-        # Actually, kc.inspect returns msg_id. We need to wait for reply on shell_channel.
-        # But we are polling iopub in a thread.
-        # We can poll shell channel here?
-        # WARNING: Blocking here might block the main loop if we are not careful.
-        # But inspect is usually fast.
-        try:
-            reply = self.kc.get_shell_msg(timeout=1)
-            if reply['parent_header']['msg_id'] == msg_id:
-                 content = reply['content']
-                 if content['status'] == 'ok' and content['found']:
-                     data = content['data']
-                     # Jupyter inspect returns text/plain usually.
-                     docstring = data.get('text/plain', 'No info')
-                     
-                     result = {
-                         "name": name,
-                         "type": "unknown", 
-                         "docstring": docstring,
-                         "file": "",
-                         "definition": ""
-                     }
-                     send_json({"type": "inspection_data", "data": result})
-        except:
-            pass
+        start_time = time.time()
+        while time.time() - start_time < 2:
+            try:
+                reply = self.kc.get_shell_msg(timeout=0.1)
+                # sys.stderr.write(f"DEBUG: Inspect reply: {reply['content']['status']}\n")
+                if reply['parent_header']['msg_id'] == msg_id:
+                     content = reply['content']
+                     if content['status'] == 'ok' and content['found']:
+                         data = content['data']
+                         # Jupyter inspect returns text/plain usually.
+                         docstring = data.get('text/plain', 'No info')
+                         
+                         result = {
+                             "name": name,
+                             "type": "unknown", 
+                             "docstring": docstring,
+                             "file": "",
+                             "definition": ""
+                         }
+                         send_json({"type": "inspection_data", "data": result})
+                     return # Done
+            except queue.Empty:
+                continue
+            except Exception as e:
+                # sys.stderr.write(f"DEBUG: Inspect error: {str(e)}\n")
+                break
+
+    def copy_to_clipboard(self, name):
+        script = f"""
+from IPython.display import display
+try:
+    if "{name}" in globals():
+        val = globals()["{name}"]
+        display({{"application/vnd.jovian.clipboard+json": {{"content": str(val)}}}}, raw=True)
+except Exception as e:
+    print(f"Error copying: {{e}}")
+"""
+        self.var_msg_id = self.kc.execute(script, silent=True)
+
+    def set_plot_mode(self, mode):
+        # Handle plot mode switching
+        # mode: "inline" or "window"
+        if mode == "window":
+            # Try to switch to qt or tk
+            self.kc.execute("%matplotlib qt || %matplotlib tk || %matplotlib auto", silent=True)
+        else:
+            self.kc.execute("%matplotlib inline", silent=True)
 
     def purge_cache(self, valid_ids, file_dir):
         if not file_dir or not os.path.exists(file_dir): return
@@ -493,6 +523,10 @@ def main():
                 bridge.peek(cmd["name"])
             elif cmd.get("command") == "inspect":
                 bridge.inspect(cmd["name"])
+            elif cmd.get("command") == "copy_to_clipboard":
+                bridge.copy_to_clipboard(cmd["name"])
+            elif cmd.get("command") == "set_plot_mode":
+                bridge.set_plot_mode(cmd["mode"])
             elif cmd.get("command") == "purge_cache":
                 bridge.purge_cache(cmd["ids"], cmd.get("file_dir"))
             elif cmd.get("command") == "remove_cache":
