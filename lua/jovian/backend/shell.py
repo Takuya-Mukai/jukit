@@ -102,6 +102,11 @@ class JovianShell:
     def set_plot_mode(self, mode):
         self.plot_mode = mode
 
+    def enable_gui(self, gui=None):
+        # We don't support real GUI loops, but we need to implement this
+        # to avoid NotImplementedError when users run %matplotlib inline
+        pass
+
     def _custom_show(self, *args, **kwargs):
         if self.plot_mode == "window":
             return self._original_show(*args, **kwargs)
