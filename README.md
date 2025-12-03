@@ -45,6 +45,19 @@ require("image").setup({
 })
 ```
 
+## ⚡ Try it with Nix (No Installation Required)
+
+If you have [Nix](https://nixos.org/) installed, you can try `jovian.nvim` immediately without installing it or cloning the repository. This will drop you into a pre-configured shell with Neovim, Python dependencies, and the plugin ready to go.
+
+> [!NOTE]
+> This trial environment is configured to use the **Kitty** terminal backend for image rendering. Please run this inside a [Kitty](https://sw.kovidgoyal.net/kitty/) terminal.
+
+```bash
+nix develop github:m-tky/jovian.nvim
+# Inside the shell:
+nvim-jovian demo_jovian.py
+```
+
 ## ⚡ Quickstart
 
 Using [lazy.nvim](https://github.com/folke/lazy.nvim):
