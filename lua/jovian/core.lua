@@ -143,8 +143,14 @@ function M.start_kernel()
 	local backend_dir = vim.fn.fnamemodify(debug.getinfo(1).source:sub(2), ":h:h:h") .. "/lua/jovian/backend"
 	local cmd = {}
 
-	-- Add: SSH support
-	if Config.options.ssh_host then
+    if Config.options.connection_file then
+        -- Connect to existing kernel via connection file
+        cmd = vim.split(Config.options.python_interpreter, " ")
+        table.insert(cmd, script_path)
+        table.insert(cmd, "--connection-file")
+        table.insert(cmd, Config.options.connection_file)
+        UI.append_to_repl("[Jovian] Connecting to kernel via: " .. Config.options.connection_file, "Special")
+	elseif Config.options.ssh_host then
 		local host = Config.options.ssh_host
 		local remote_python = Config.options.ssh_python
 
@@ -667,9 +673,16 @@ vim.schedule(function()
         if config.type == "ssh" then
             Config.options.ssh_host = config.host
             Config.options.ssh_python = config.python
+            Config.options.connection_file = nil
+        elseif config.type == "connection" then
+            Config.options.ssh_host = nil
+            Config.options.ssh_python = nil
+            Config.options.connection_file = config.connection_file
+            Config.options.python_interpreter = config.python
         else
             Config.options.ssh_host = nil
             Config.options.ssh_python = nil
+            Config.options.connection_file = nil
             Config.options.python_interpreter = config.python
         end
     end

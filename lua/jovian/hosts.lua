@@ -79,10 +79,17 @@ function M.use_host(name)
     if config.type == "ssh" then
         Config.options.ssh_host = config.host
         Config.options.ssh_python = config.python
+        Config.options.connection_file = nil
         Config.options.python_interpreter = config.python -- Sync for reference
+    elseif config.type == "connection" then
+        Config.options.ssh_host = nil
+        Config.options.ssh_python = nil
+        Config.options.connection_file = config.connection_file
+        Config.options.python_interpreter = config.python
     else
         Config.options.ssh_host = nil
         Config.options.ssh_python = nil
+        Config.options.connection_file = nil
         Config.options.python_interpreter = config.python
     end
     
@@ -103,14 +110,30 @@ function M.validate_connection(config)
     -- Default to current config if not provided
     local host = config and config.host or Config.options.ssh_host
     local python = config and config.python or Config.options.python_interpreter
+    local connection_file = config and config.connection_file or Config.options.connection_file
+    
     if config and config.type == "ssh" then
         python = config.python
+    elseif config and config.type == "connection" then
+        host = nil
+        python = config.python
+        connection_file = config.connection_file
     elseif config and config.type == "local" then
         host = nil
         python = config.python
     end
 
-    if host then
+    if connection_file then
+        -- Validate connection file existence
+        if vim.fn.filereadable(connection_file) == 0 then
+             return false, "Connection file not found: " .. connection_file
+        end
+        -- We could also try to validate the python interpreter if provided, but it's local
+        local py_check = vim.fn.system({python, "--version"})
+        if vim.v.shell_error ~= 0 then
+            return false, "Local Python interpreter '" .. python .. "' not found."
+        end
+    elseif host then
         -- Check SSH connectivity
         vim.notify("[Jovian] Validating connection to " .. host .. "...", vim.log.levels.INFO)
         

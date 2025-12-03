@@ -6,7 +6,17 @@ import queue
 import threading
 import time
 import re
-from jupyter_client.manager import KernelManager
+import argparse
+
+try:
+    from jupyter_client.manager import KernelManager
+    from jupyter_client.blocking.client import BlockingKernelClient
+except ImportError as e:
+    # Handle environment issues (common on NixOS/Linux with missing libs)
+    sys.stderr.write(f"[Jovian] Critical Import Error: {e}\n")
+    if "libstdc++.so.6" in str(e):
+        sys.stderr.write("[Jovian] Tip: You are missing 'libstdc++.so.6'. If on NixOS, use 'nix-shell' or set LD_LIBRARY_PATH.\n")
+    sys.exit(1)
 
 # --- Protocol Utils ---
 def send_json(msg):
@@ -15,9 +25,9 @@ def send_json(msg):
 
 # --- Kernel Bridge ---
 class KernelBridge:
-    def __init__(self):
-        # Use the same python interpreter as the bridge
-        self.km = KernelManager(kernel_cmd=[sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}"])
+    def __init__(self, connection_file=None):
+        self.connection_file = connection_file
+        self.km = None
         self.kc = None
         self.running = False
         self.msg_queue = queue.Queue()
@@ -29,13 +39,22 @@ class KernelBridge:
         self.save_dir = None
 
     def start(self):
-        self.km.start_kernel()
-        self.kc = self.km.client()
-        self.kc.start_channels()
+        if self.connection_file:
+            # Connect to existing kernel
+            self.kc = BlockingKernelClient(connection_file=self.connection_file)
+            self.kc.load_connection_file()
+            self.kc.start_channels()
+        else:
+            # Start new local kernel
+            self.km = KernelManager(kernel_cmd=[sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}"])
+            self.km.start_kernel()
+            self.kc = self.km.client()
+            self.kc.start_channels()
+
         try:
             self.kc.wait_for_ready(timeout=10)
         except RuntimeError:
-            send_json({"type": "error", "msg": "Failed to start kernel"})
+            send_json({"type": "error", "msg": "Failed to connect to kernel"})
             return
 
         self.running = True
@@ -452,7 +471,11 @@ except Exception:
         pass # Omitted
 
 def main():
-    bridge = KernelBridge()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--connection-file", help="Path to Jupyter connection file")
+    args = parser.parse_args()
+
+    bridge = KernelBridge(connection_file=args.connection_file)
     bridge.start()
     
     send_json({"type": "debug", "msg": "Kernel Bridge Started"})

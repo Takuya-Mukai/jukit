@@ -17,6 +17,8 @@
           
           pythonEnv = pkgs.python3.withPackages (ps: with ps; [
             ipython
+            ipykernel
+            jupyter-client
             numpy
             pandas
             matplotlib
