@@ -274,6 +274,9 @@ class KernelBridge:
         self.current_cell_id = cell_id
         self.save_dir = file_dir
         
+        # Notify execution started
+        send_json({"type": "execution_started", "cell_id": cell_id, "code": code})
+        
         # Switch kernel CWD if provided
         if cwd:
             # Escape backslashes for Windows compatibility if needed, though we are on Linux

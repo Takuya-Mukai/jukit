@@ -221,14 +221,7 @@ function M.send_payload(code, cell_id, filename)
 
 	UI.set_cell_status(current_buf, cell_id, "running", Config.options.ui_symbols.running)
 
-	UI.append_to_repl({ "In [" .. cell_id .. "]:" }, "Type")
-	local code_lines = vim.split(code, "\n")
-	local indented = {}
-	for _, l in ipairs(code_lines) do
-		table.insert(indented, "    " .. l)
-	end
-	UI.append_to_repl(indented)
-	UI.append_to_repl({ "" })
+
 
 	local filename = vim.fn.expand("%:t")
 	if filename == "" then

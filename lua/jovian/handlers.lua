@@ -11,6 +11,17 @@ function M.handle_image_saved(msg)
     UI.append_to_repl("[Image Created]: " .. vim.fn.fnamemodify(msg.path, ":t"), "Special")
 end
 
+function M.handle_execution_started(msg)
+    UI.append_to_repl({ "In [" .. msg.cell_id .. "]:" }, "Type")
+    local code_lines = vim.split(msg.code, "\n")
+    local indented = {}
+    for _, l in ipairs(code_lines) do
+        table.insert(indented, "    " .. l)
+    end
+    UI.append_to_repl(indented)
+    UI.append_to_repl({ "" })
+end
+
 function M.handle_result_ready(msg)
     UI.append_to_repl("-> Done: " .. msg.cell_id, "Comment")
     State.current_preview_file = nil
