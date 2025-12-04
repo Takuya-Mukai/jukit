@@ -531,6 +531,11 @@ _jovian_peek("{name}")
                      if content['status'] == 'ok' and content['found']:
                          data = content['data']
                          docstring = data.get('text/plain', 'No info')
+                         
+                         # Strip ANSI codes
+                         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                         docstring = ansi_escape.sub('', docstring)
+                         
                          result = {
                              "name": name,
                              "type": "unknown", 
