@@ -94,10 +94,10 @@ print(df)
 # Long-running cells show "Running..." status.
 
 # %% id="ZiL5ICSQW54J"
-print("Starting long task...")
-for i in range(5):
-    time.sleep(0.5)
-    print(f"Step {i+1}/5 complete")
+from tqdm import tqdm
+print("Starting long task with tqdm...")
+for i in tqdm(range(20)):
+    time.sleep(0.1)
 print("Done!")
 
 # %% [markdown]

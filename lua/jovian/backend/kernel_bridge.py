@@ -78,26 +78,8 @@ _jovian_original_show = None
 def _jovian_show(*args, **kwargs):
     global _jovian_plot_mode
     global _jovian_original_show
-    if _jovian_plot_mode == 'window':
-        if _jovian_original_show:
-            try:
-                # Call the original show function if it exists
-                return _jovian_original_show(*args, **kwargs)
-            except Exception:
-                # Fallback to default matplotlib show if original fails
-                try:
-                    import matplotlib.pyplot as plt
-                    return plt.show(*args, **kwargs)
-                except: pass
-        else:
-            # If no original show, try default matplotlib show
-            try:
-                import matplotlib.pyplot as plt
-                return plt.show(*args, **kwargs)
-            except: pass
-        return
     
-    # Inline mode
+    # Always capture and display the image for the preview pane
     try:
         import matplotlib.pyplot as plt
         fig = plt.gcf()
@@ -107,8 +89,37 @@ def _jovian_show(*args, **kwargs):
             fig.savefig(buf, format='png', bbox_inches='tight')
             buf.seek(0)
             display(Image(data=buf.getvalue(), format='png'))
+    except Exception:
+        pass
+
+    # Handle window mode
+    if _jovian_plot_mode == 'window':
+        if _jovian_original_show:
+            try:
+                # Call the original show function if it exists
+                return _jovian_original_show(*args, **kwargs)
+            except Exception:
+                # Fallback to default matplotlib show if original fails
+                try:
+                    import matplotlib.pyplot as plt
+                    # Avoid recursion if plt.show is self
+                    if plt.show != _jovian_show:
+                         return plt.show(*args, **kwargs)
+                except: pass
+        else:
+            # If no original show, try default matplotlib show
+            try:
+                import matplotlib.pyplot as plt
+                if plt.show != _jovian_show:
+                    return plt.show(*args, **kwargs)
+            except: pass
+        return
+    
+    # Inline mode cleanup
+    try:
+        import matplotlib.pyplot as plt
         plt.close(fig)
-    except Exception as e:
+    except Exception:
         pass
 
 def _jovian_patch_matplotlib(*args):
@@ -126,6 +137,7 @@ def _jovian_patch_matplotlib(*args):
 try:
     ip = get_ipython()
     ip.events.register('post_run_cell', _jovian_patch_matplotlib)
+    del ip
 except:
     pass
 
@@ -547,10 +559,19 @@ except Exception:
 
     def set_plot_mode(self, mode):
         send_json({"type": "debug", "msg": f"Setting plot mode to: {mode}"})
+        
+        # Update variable FIRST
+        cmd = f"_jovian_plot_mode = '{mode}'\n"
+        
+        # Then switch backend
         if mode == "window":
-            self.kc.execute("%matplotlib qt || %matplotlib tk || %matplotlib auto", silent=False, store_history=True)
+            # Try magic first, then explicit switch if needed
+            cmd += "%matplotlib tk\n"
+            cmd += "try:\n    import matplotlib.pyplot as plt\n    plt.switch_backend('TkAgg')\nexcept: pass"
         else:
-            self.kc.execute("%matplotlib inline", silent=False, store_history=True)
+            cmd += "%matplotlib inline"
+            
+        self.kc.execute(cmd, silent=False, store_history=True)
 
     def purge_cache(self, ids, file_dir):
         if not file_dir or not os.path.exists(file_dir): return
