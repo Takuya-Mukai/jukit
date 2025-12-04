@@ -255,6 +255,10 @@ function M.send_payload(code, cell_id, filename)
 		file_dir = cache_dir,
 		cwd = file_dir,
 	}
+    
+    -- Store hash for stale detection
+    State.cell_hashes[cell_id] = Utils.get_cell_hash(code)
+    
 	local msg = vim.fn.json_encode(payload)
 	vim.fn.chansend(State.job_id, msg .. "\n")
 end
