@@ -70,6 +70,7 @@ function M.setup(opts)
 		-- vim.keymap.set("n", "<leader>j.", "<cmd>JovianPeek<CR>", { desc = "Jovian: Peek Symbol" })
 		-- vim.keymap.set("n", "<leader>jn", "<cmd>JovianRunAndNext<CR>", { desc = "Jovian: Run and Next" })
 		-- vim.keymap.set("n", "<leader>jl", "<cmd>JovianRunLine<CR>", { desc = "Jovian: Run Line" })
+		-- vim.keymap.set("n", "<leader>ja", "<cmd>JovianRunAbove<CR>", { desc = "Jovian: Run Above" })
 	end
 
 	vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {

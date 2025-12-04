@@ -8,6 +8,7 @@
 # 1. Place your cursor on a cell (lines starting with `# %%`).
 # 2. Run the cell using `:JovianRun` (or your configured keybinding).
 # 3. Observe the output in the REPL and Preview windows.
+# 4. Try `:JovianRunAbove` to run all cells up to the current one.
 
 # %% id="3HBWq2Im4lG4"
 import time
