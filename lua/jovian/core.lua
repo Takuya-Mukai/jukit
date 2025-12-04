@@ -193,6 +193,12 @@ function M.start_kernel()
         if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
             M.show_variables()
         end
+        
+        -- Initialize plot mode from config
+        if Config.options.plot_view_mode then
+            local msg = vim.fn.json_encode({ command = "set_plot_mode", mode = Config.options.plot_view_mode })
+            vim.fn.chansend(State.job_id, msg .. "\n")
+        end
 	end, 500)
 end
 
