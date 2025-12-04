@@ -59,9 +59,80 @@ class KernelBridge:
 
         self.running = True
         
+        self._inject_runtime()
+        
         # Start a thread to poll IOPub messages
         self.iopub_thread = threading.Thread(target=self._poll_iopub, daemon=True)
         self.iopub_thread.start()
+
+    def _inject_runtime(self):
+        script = """
+import sys
+import io
+from IPython.display import display, Image
+
+# Global state
+_jovian_plot_mode = 'inline'
+_jovian_original_show = None
+
+def _jovian_show(*args, **kwargs):
+    global _jovian_plot_mode
+    global _jovian_original_show
+    if _jovian_plot_mode == 'window':
+        if _jovian_original_show:
+            try:
+                # Call the original show function if it exists
+                return _jovian_original_show(*args, **kwargs)
+            except Exception:
+                # Fallback to default matplotlib show if original fails
+                try:
+                    import matplotlib.pyplot as plt
+                    return plt.show(*args, **kwargs)
+                except: pass
+        else:
+            # If no original show, try default matplotlib show
+            try:
+                import matplotlib.pyplot as plt
+                return plt.show(*args, **kwargs)
+            except: pass
+        return
+    
+    # Inline mode
+    try:
+        import matplotlib.pyplot as plt
+        fig = plt.gcf()
+        # Only show if there's something to show
+        if fig.get_axes() or fig.lines or fig.patches or fig.texts:
+            buf = io.BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            display(Image(data=buf.getvalue(), format='png'))
+        plt.close(fig)
+    except Exception as e:
+        pass
+
+def _jovian_patch_matplotlib(*args):
+    global _jovian_original_show
+    try:
+        import matplotlib.pyplot as plt
+        # Only patch if not already patched
+        if plt.show.__name__ != '_jovian_show':
+            _jovian_original_show = plt.show
+            plt.show = _jovian_show
+    except ImportError:
+        pass
+
+# Register hook to ensure patch is applied after imports
+try:
+    ip = get_ipython()
+    ip.events.register('post_run_cell', _jovian_patch_matplotlib)
+except:
+    pass
+
+# Try to patch immediately
+_jovian_patch_matplotlib()
+"""
+        self.kc.execute(script, silent=True)
 
     def stop(self):
         self.running = False
@@ -125,7 +196,9 @@ class KernelBridge:
                     clip_data = data['application/vnd.jovian.clipboard+json']
                     send_json({"type": "clipboard_data", "content": clip_data["content"]})
                 elif 'image/png' in data:
-                    self.msg_queue.put({"type": "image", "data": data['image/png']})
+                    img_data = data['image/png']
+                    send_json({"type": "debug", "msg": f"Received image data, length: {len(img_data)}"})
+                    self.msg_queue.put({"type": "image", "data": img_data})
                 elif 'text/plain' in data:
                     self.msg_queue.put({"type": "text", "content": data['text/plain'] + "\n"})
 
@@ -205,21 +278,35 @@ class KernelBridge:
                         output_md_lines.append("")
                 
                 elif item["type"] == "image":
+                    img_data_b64 = item["data"]
+                    if not img_data_b64:
+                        send_json({"type": "debug", "msg": "Skipping empty image data"})
+                        continue
+                        
                     img_filename = f"{self.current_cell_id}_{self.output_counter:02d}.png"
                     img_path = os.path.join(save_dir, img_filename)
-                    with open(img_path, "wb") as f:
-                        f.write(base64.b64decode(item["data"]))
                     
-                    images[img_filename] = item["data"]
-                    output_md_lines.append(f"![Result]({img_filename})")
-                    output_md_lines.append("")
-                    self.output_counter += 1
-                    
-                    send_json({
-                        "type": "image_saved",
-                        "path": os.path.abspath(img_path),
-                        "cell_id": self.current_cell_id
-                    })
+                    try:
+                        decoded_data = base64.b64decode(img_data_b64)
+                        if len(decoded_data) == 0:
+                             send_json({"type": "debug", "msg": "Image data decoded to empty bytes"})
+                             continue
+                             
+                        with open(img_path, "wb") as f:
+                            f.write(decoded_data)
+                        
+                        images[img_filename] = img_data_b64
+                        output_md_lines.append(f"![Result]({img_filename})")
+                        output_md_lines.append("")
+                        self.output_counter += 1
+                        
+                        send_json({
+                            "type": "image_saved",
+                            "path": os.path.abspath(img_path),
+                            "cell_id": self.current_cell_id
+                        })
+                    except Exception as e:
+                        send_json({"type": "error", "msg": f"Failed to save image: {e}"})
 
                 elif item["type"] == "error":
                     error_info = {
@@ -459,16 +546,64 @@ except Exception:
         self.var_msg_id = self.kc.execute(script, silent=False, store_history=True)
 
     def set_plot_mode(self, mode):
+        send_json({"type": "debug", "msg": f"Setting plot mode to: {mode}"})
         if mode == "window":
             self.kc.execute("%matplotlib qt || %matplotlib tk || %matplotlib auto", silent=False, store_history=True)
         else:
             self.kc.execute("%matplotlib inline", silent=False, store_history=True)
 
     def purge_cache(self, ids, file_dir):
-        pass # Omitted
+        if not file_dir or not os.path.exists(file_dir): return
         
+        try:
+            valid_set = set(ids)
+            send_json({"type": "debug", "msg": f"Purging cache in {file_dir}, valid ids: {len(valid_set)}"})
+            
+            for f in os.listdir(file_dir):
+                # Files: {id}.md, {id}_{counter}.png
+                # We need to extract the ID from the filename.
+                # Filename format: ID.md or ID_XX.png
+                
+                file_id = None
+                if f.endswith(".md"):
+                    file_id = f[:-3]
+                elif f.endswith(".png"):
+                    # ID_XX.png
+                    # Find the last underscore
+                    last_underscore = f.rfind('_')
+                    if last_underscore != -1:
+                        file_id = f[:last_underscore]
+                
+                if file_id and file_id not in valid_set:
+                    try:
+                        os.remove(os.path.join(file_dir, f))
+                        send_json({"type": "debug", "msg": f"Deleted stale cache: {f}"})
+                    except Exception as e:
+                        send_json({"type": "debug", "msg": f"Failed to delete {f}: {e}"})
+        except Exception as e:
+            send_json({"type": "debug", "msg": f"Purge error: {e}"})
+
     def remove_cache(self, ids, file_dir):
-        pass # Omitted
+        if not file_dir or not os.path.exists(file_dir): return
+        
+        try:
+            remove_set = set(ids)
+            for f in os.listdir(file_dir):
+                file_id = None
+                if f.endswith(".md"):
+                    file_id = f[:-3]
+                elif f.endswith(".png"):
+                    last_underscore = f.rfind('_')
+                    if last_underscore != -1:
+                        file_id = f[:last_underscore]
+                
+                if file_id and file_id in remove_set:
+                    try: 
+                        os.remove(os.path.join(file_dir, f))
+                        send_json({"type": "debug", "msg": f"Removed cache: {f}"})
+                    except: pass
+        except:
+            pass
 
 def main():
     parser = argparse.ArgumentParser()
@@ -506,6 +641,10 @@ def main():
                 bridge.copy_to_clipboard(cmd["name"])
             elif cmd.get("command") == "set_plot_mode":
                 bridge.set_plot_mode(cmd["mode"])
+            elif cmd.get("command") == "purge_cache":
+                bridge.purge_cache(cmd["ids"], cmd.get("file_dir"))
+            elif cmd.get("command") == "remove_cache":
+                bridge.remove_cache(cmd["ids"], cmd.get("file_dir"))
             
         except (json.JSONDecodeError, KeyboardInterrupt):
             pass
