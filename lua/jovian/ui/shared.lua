@@ -68,7 +68,20 @@ function M.append_to_repl(text, hl_group)
 	end
 
 	-- Send to terminal
-	vim.api.nvim_chan_send(State.term_chan, output)
+    local ok, err = pcall(vim.api.nvim_chan_send, State.term_chan, output)
+    if not ok then
+        if string.match(err, "E900") then
+            -- Invalid channel, try to recover if buffer exists
+            if State.buf.output and vim.api.nvim_buf_is_valid(State.buf.output) then
+                State.term_chan = vim.api.nvim_open_term(State.buf.output, {})
+                -- Retry send
+                pcall(vim.api.nvim_chan_send, State.term_chan, output)
+            end
+        else
+            -- Re-raise other errors
+            error(err)
+        end
+    end
 
 	-- Auto-scroll
 	if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
@@ -97,7 +110,20 @@ function M.append_stream_text(text, stream_type)
 		clean_text = RED .. clean_text .. RESET
 	end
 
-	vim.api.nvim_chan_send(State.term_chan, clean_text)
+	local ok, err = pcall(vim.api.nvim_chan_send, State.term_chan, clean_text)
+    if not ok then
+        if string.match(err, "E900") then
+            -- Invalid channel, try to recover if buffer exists
+            if State.buf.output and vim.api.nvim_buf_is_valid(State.buf.output) then
+                State.term_chan = vim.api.nvim_open_term(State.buf.output, {})
+                -- Retry send
+                pcall(vim.api.nvim_chan_send, State.term_chan, clean_text)
+            end
+        else
+            -- Re-raise other errors
+            error(err)
+        end
+    end
 
 	if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
 		local buf = State.buf.output

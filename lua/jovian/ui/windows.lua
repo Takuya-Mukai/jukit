@@ -105,148 +105,40 @@ local function apply_window_options(win, opts)
     end
 end
 
-function M.open_windows(target_win)
-	-- Get "current" if no argument,
-	-- but ensure target_win is passed if called from toggle_windows
-	local return_to = target_win or vim.api.nvim_get_current_win()
-
-	-- Preview Window
-	if not (State.win.preview and vim.api.nvim_win_is_valid(State.win.preview)) then
-		vim.cmd("vsplit")
-		vim.cmd("wincmd L")
-		State.win.preview = vim.api.nvim_get_current_win()
-		local width = math.floor(vim.o.columns * (Config.options.preview_width_percent / 100))
-		vim.api.nvim_win_set_width(State.win.preview, width)
-		local pbuf = vim.api.nvim_create_buf(false, true)
-		vim.api.nvim_win_set_buf(State.win.preview, pbuf)
-
-		-- Appearance settings
-		local win = State.win.preview
-		vim.wo[win].number = false
-		vim.wo[win].relativenumber = false
-		vim.wo[win].signcolumn = "no"
-		vim.wo[win].foldcolumn = "0"
-		vim.wo[win].fillchars = "eob: "
-	end
-
-	-- REPL Window
-	if not (State.win.output and vim.api.nvim_win_is_valid(State.win.output)) then
-		-- Return focus to "code" before splitting
-		-- Otherwise it might split from the Preview window
-		if vim.api.nvim_win_is_valid(return_to) then
-			vim.api.nvim_set_current_win(return_to)
-		end
-
-		vim.cmd("belowright split")
-		-- vim.cmd("wincmd j") -- belowright puts us in the new bottom window
-		State.win.output = vim.api.nvim_get_current_win()
-		State.buf.output = M.get_or_create_buf("JovianConsole")
-
-		if vim.api.nvim_buf_line_count(State.buf.output) <= 1 then
-			Shared.append_to_repl("[Jovian Console Ready]", "Special")
-		end
-
-		vim.api.nvim_win_set_buf(State.win.output, State.buf.output)
-		local height = math.floor(vim.o.lines * (Config.options.repl_height_percent / 100))
-		vim.api.nvim_win_set_height(State.win.output, height)
-
-		-- Appearance settings
-		local win = State.win.output
-		vim.wo[win].number = false
-		vim.wo[win].relativenumber = false
-		vim.wo[win].signcolumn = "no"
-		vim.wo[win].scrolloff = 0
-		vim.wo[win].fillchars = "eob: "
-	end
-
-	-- Fix: Return synchronously once, and also via schedule as a backup
-	if return_to and vim.api.nvim_win_is_valid(return_to) then
-		vim.api.nvim_set_current_win(return_to)
-	end
-
-	vim.defer_fn(function()
-		if return_to and vim.api.nvim_win_is_valid(return_to) then
-			vim.api.nvim_set_current_win(return_to)
-			-- Call stopinsert just in case we entered terminal mode
-			vim.cmd("stopinsert")
-		end
-	end, 50)
-
-    -- Auto-open Vars pane if configured
-    if Config.options.toggle_var then
-        if not (State.win.variables and vim.api.nvim_win_is_valid(State.win.variables)) then
-            M.toggle_variables_pane()
-        end
-    end
-
-    -- Auto-open Pin pane if configured
-    if Config.options.toggle_pin then
-        if not (State.win.pin and vim.api.nvim_win_is_valid(State.win.pin)) then
-            M.open_pin_window()
-        end
-    end
-
-    -- Trigger preview check immediately
-    require("jovian.core").check_cursor_cell()
-end
+-- Legacy open_windows removed
 
 function M.close_windows()
-	if State.win.preview and vim.api.nvim_win_is_valid(State.win.preview) then
-		vim.api.nvim_win_close(State.win.preview, true)
-	end
-	if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
-		vim.api.nvim_win_close(State.win.output, true)
-	end
-    
-    -- Auto-close Vars pane if configured
-    if Config.options.toggle_var then
-        if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
-            vim.api.nvim_win_close(State.win.variables, true)
-            State.win.variables = nil
+    -- Close all known windows
+    local wins = {State.win.preview, State.win.output, State.win.variables, State.win.pin}
+    for _, win in pairs(wins) do
+        if win and vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_close(win, true)
         end
     end
-
-	State.win.preview, State.win.output = nil, nil
-	State.current_preview_file = nil
     
-    if State.win.pin and vim.api.nvim_win_is_valid(State.win.pin) then
-        -- Only close if toggle_pin is true, OR if we are forcing close?
-        -- Usually close_windows implies closing everything related to Jovian.
-        -- But if toggle_pin is false, maybe user wants to keep it?
-        -- User said "JovianToggle ... also toggle pin if chosen".
-        -- So if toggle_pin is true, we close it. If false, we leave it?
-        -- But JovianToggle calls close_windows.
-        -- Let's assume close_windows closes everything, but open_windows only opens what's configured.
-        -- Wait, if toggle_pin is false, JovianToggle should NOT toggle pin.
-        -- But JovianToggle calls close_windows which closes everything.
-        -- So we should only close pin here if toggle_pin is true.
-        
-        if Config.options.toggle_pin then
-            vim.api.nvim_win_close(State.win.pin, true)
-            State.win.pin = nil
-        end
-    end
+    State.win.preview = nil
+    State.win.output = nil
+    State.win.variables = nil
+    State.win.pin = nil
 end
 
 function M.toggle_windows()
-	-- Fix: Reliably capture the window ID (code window) before execution
-	local cur_win = vim.api.nvim_get_current_win()
-
-	if
-		(State.win.preview and vim.api.nvim_win_is_valid(State.win.preview))
-		or (State.win.output and vim.api.nvim_win_is_valid(State.win.output))
-	then
-		-- Closing
-		M.close_windows()
-
-		-- After closing, return to original window if it still exists
-		if vim.api.nvim_win_is_valid(cur_win) then
-			vim.api.nvim_set_current_win(cur_win)
-		end
-	else
-		-- Opening: Pass captured cur_win as "return destination"
-		M.open_windows(cur_win)
-	end
+    -- Check if any window is open
+    local any_open = false
+    local wins = {State.win.preview, State.win.output, State.win.variables, State.win.pin}
+    
+    for _, win in pairs(wins) do
+        if win and vim.api.nvim_win_is_valid(win) then
+            any_open = true
+            break
+        end
+    end
+    
+    if any_open then
+        M.close_windows()
+    else
+        M.open_windows()
+    end
 end
 
 function M.open_markdown_preview(filepath)
@@ -321,9 +213,8 @@ function M.toggle_variables_pane()
     vim.api.nvim_buf_set_option(State.buf.variables, "filetype", "jovian_vars")
     vim.api.nvim_win_set_buf(State.win.variables, State.buf.variables)
 
-    -- Set width
-    local width_percent = Config.options.vars_pane_width_percent or 20
-    local width = math.floor(vim.o.columns * (width_percent / 100))
+    -- Set width (default 25%)
+    local width = math.floor(vim.o.columns * 0.25)
     vim.api.nvim_win_set_width(State.win.variables, width)
 
     -- Window options
@@ -344,6 +235,222 @@ function M.update_variables_pane()
     end
 end
 
+-- Element Registry
+local Elements = {
+    preview = {
+        open = function()
+            if not State.buf.preview or not vim.api.nvim_buf_is_valid(State.buf.preview) then
+                State.buf.preview = M.get_or_create_buf("JovianPreview")
+            end
+            return State.buf.preview
+        end,
+        setup = function(win)
+            apply_window_options(win, { wrap = true })
+            State.win.preview = win
+        end
+    },
+    output = {
+        open = function()
+            if not State.buf.output or not vim.api.nvim_buf_is_valid(State.buf.output) then
+                State.buf.output = M.get_or_create_buf("JovianOutput")
+            end
+            return State.buf.output
+        end,
+        setup = function(win)
+            apply_window_options(win, { wrap = true })
+            State.win.output = win
+        end
+    },
+    variables = {
+        open = function()
+            if not State.buf.variables or not vim.api.nvim_buf_is_valid(State.buf.variables) then
+                State.buf.variables = vim.api.nvim_create_buf(false, true)
+                vim.api.nvim_buf_set_name(State.buf.variables, "JovianVariables")
+                vim.api.nvim_buf_set_option(State.buf.variables, "buftype", "nofile")
+                vim.api.nvim_buf_set_option(State.buf.variables, "filetype", "jovian_vars")
+            end
+            return State.buf.variables
+        end,
+        setup = function(win)
+            apply_window_options(win, { wrap = false })
+            State.win.variables = win
+            Renderers.render_variables_pane({})
+        end
+    },
+    pin = {
+        open = function()
+            -- We don't create a specific buffer here, usually it's dynamic.
+            -- But we need to return *something*.
+            -- If we have a pinned file, use it.
+            if State.current_pin_file then
+                local buf = vim.fn.bufadd(State.current_pin_file)
+                if not vim.api.nvim_buf_is_loaded(buf) then vim.fn.bufload(buf) end
+                return buf
+            else
+                local buf = vim.api.nvim_create_buf(false, true)
+                vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "No pinned content" })
+                vim.api.nvim_buf_set_option(buf, "buftype", "nofile")
+                vim.api.nvim_buf_set_option(buf, "modifiable", false)
+                return buf
+            end
+        end,
+        setup = function(win)
+            apply_window_options(win, { wrap = true })
+            State.win.pin = win
+        end
+    }
+}
+
+function M.open_layout(layout, parent_win)
+    local pos = layout.position or "right"
+    local size = layout.size or 40
+    
+    -- Ensure we split from the parent window
+    if parent_win and vim.api.nvim_win_is_valid(parent_win) then
+        vim.api.nvim_set_current_win(parent_win)
+    end
+    
+    local split_cmd = "vsplit"
+    if pos == "top" or pos == "bottom" then
+        split_cmd = "split"
+    end
+    
+    -- Handle percentage size
+    if type(size) == "number" and size > 0 and size < 1 then
+        if pos == "top" or pos == "bottom" then
+            size = math.floor(vim.o.lines * size)
+        else
+            size = math.floor(vim.o.columns * size)
+        end
+    end
+    
+    local split_mod = "belowright"
+    if pos == "top" or pos == "left" then
+        split_mod = "topleft"
+    end
+    
+    -- Open main split
+    vim.cmd(split_mod .. " " .. size .. split_cmd)
+    local main_win = vim.api.nvim_get_current_win()
+    
+    -- Fix size to prevent resizing by other layouts
+    if pos == "left" or pos == "right" then
+        vim.wo[main_win].winfixwidth = true
+    elseif pos == "top" or pos == "bottom" then
+        vim.wo[main_win].winfixheight = true
+    end
+    
+    -- We need to track this window to close it later?
+    -- Actually, we will split inside it, so the main window becomes one of the elements.
+    
+    -- Calculate total size units
+    local elements = layout.elements
+    local total_units = 0
+    for _, el in ipairs(elements) do
+        total_units = total_units + (el.size or 1)
+    end
+    
+    -- Get container size BEFORE splitting
+    -- If pos is right/left, we are stacking vertically (heights)
+    -- If pos is top/bottom, we are stacking horizontally (widths)
+    local is_vertical_stack = (pos == "left" or pos == "right")
+    local total_pixels = 0
+    if is_vertical_stack then
+        total_pixels = vim.api.nvim_win_get_height(main_win)
+    else
+        total_pixels = vim.api.nvim_win_get_width(main_win)
+    end
+    
+    -- Iterate elements
+    local current_win = main_win
+    local created_wins = {} -- Store windows to resize later
+    
+    for i, el in ipairs(elements) do
+        local handler = Elements[el.id]
+        if handler then
+            if i > 1 then
+                -- Split the previous window
+                local sub_split_cmd = "split" -- Default for side panel (stack vertically)
+                if pos == "top" or pos == "bottom" then
+                    sub_split_cmd = "vsplit" -- Stack horizontally for top/bottom panels
+                end
+                
+                vim.api.nvim_set_current_win(current_win)
+                vim.cmd("belowright " .. sub_split_cmd)
+                current_win = vim.api.nvim_get_current_win()
+            end
+            
+            -- Store window
+            table.insert(created_wins, { win = current_win, size = el.size or 1 })
+            
+            -- Set buffer
+            local buf = handler.open()
+            vim.api.nvim_win_set_buf(current_win, buf)
+            handler.setup(current_win)
+        end
+    end
+    
+    -- Resize elements
+    -- Apply sizes
+    for _, item in ipairs(created_wins) do
+        local win = item.win
+        if vim.api.nvim_win_is_valid(win) then
+            local ratio = item.size / total_units
+            local target_size = math.floor(total_pixels * ratio)
+            
+            -- Ensure minimum size of 1
+            target_size = math.max(1, target_size)
+
+            if is_vertical_stack then
+                vim.api.nvim_win_set_height(win, target_size)
+                vim.wo[win].winfixheight = true
+            else
+                vim.api.nvim_win_set_width(win, target_size)
+                vim.wo[win].winfixwidth = true
+            end
+        end
+    end
+end
+
+function M.open_windows(target_win)
+    -- Get "current" if no argument, but we want the "code" window usually.
+    local parent_win = target_win or vim.api.nvim_get_current_win()
+
+    -- Save equalalways state and disable it to prevent auto-resizing
+    local ea = vim.o.equalalways
+    vim.o.equalalways = false
+
+    -- Use configured layouts
+    local layouts = Config.options.ui.layouts
+    if not layouts then
+        -- Fallback to default if not defined (should be in config)
+        layouts = {
+            {
+                elements = {
+                    { id = "preview", size = 0.35 },
+                    { id = "output", size = 0.25 },
+                    { id = "variables", size = 0.2 },
+                    { id = "pin", size = 0.2 },
+                },
+                position = "right",
+                size = 40,
+            }
+        }
+    end
+    
+    for _, layout in ipairs(layouts) do
+        M.open_layout(layout, parent_win)
+    end
+    
+    -- Restore equalalways
+    vim.o.equalalways = ea
+    
+    -- Restore focus to code window
+    if parent_win and vim.api.nvim_win_is_valid(parent_win) then
+        vim.api.nvim_set_current_win(parent_win)
+    end
+end
+
 function M.open_pin_window()
     if State.win.pin and vim.api.nvim_win_is_valid(State.win.pin) then
         return
@@ -355,8 +462,30 @@ function M.open_pin_window()
     local target_win = State.win.preview
     if not (target_win and vim.api.nvim_win_is_valid(target_win)) then
         -- If preview is not open, open it first (it handles splitting)
-        M.open_windows()
+        -- M.open_windows() -- This was the old call, now we use layouts
         
+        -- For now, if preview is not open, we can't open pin window in it.
+        -- This implies that the layout engine should be responsible for opening windows.
+        -- If the user wants a pin window, they should define it in their layout.
+        -- For backward compatibility, we'll try to open a default layout if no preview is found.
+        local layouts = Config.options.ui.layouts
+        if not layouts then
+            layouts = {
+                {
+                    elements = {
+                        { id = "preview", size = 0.4 },
+                        { id = "output", size = 0.3 },
+                        { id = "pin", size = 0.3 },
+                    },
+                    position = "right",
+                    size = 40,
+                }
+            }
+        end
+        for _, layout in ipairs(layouts) do
+            M.open_layout(layout)
+        end
+
         -- Check if open_windows already opened the pin window (due to toggle_pin config)
         if State.win.pin and vim.api.nvim_win_is_valid(State.win.pin) then
             return
@@ -373,8 +502,8 @@ function M.open_pin_window()
     vim.cmd("belowright split")
     State.win.pin = vim.api.nvim_get_current_win()
     
-    -- Set height
-    local height = math.floor(vim.o.lines * (Config.options.pin_height_percent / 100))
+    -- Set height (default 30%)
+    local height = math.floor(vim.o.lines * 0.3)
     vim.api.nvim_win_set_height(State.win.pin, height)
     
     -- Window options

@@ -2,12 +2,6 @@ local M = {}
 
 M.defaults = {
 	-- UI
-	preview_width_percent = 25,
-	repl_height_percent = 25,
-    pin_height_percent = 20, -- Height of the pinned result window (percent of editor height)
-    vars_pane_width_percent = 25, -- Width of the variables pane (percent of editor width)
-    toggle_var = true, -- Automatically toggle variables pane with UI
-    toggle_pin = true, -- Automatically toggle pinned window with UI
 
 	-- Visuals
 	flash_highlight_group = "Visual",
@@ -21,6 +15,33 @@ M.defaults = {
 	notify_threshold = 10,
     notify_mode = "all", -- "all", "error", "none"
     plot_view_mode = "inline", -- "inline", "window"
+    
+    options = {
+        python_interpreter = "python3",
+        adjust_window_size = true,
+        max_output_lines = 1000,
+    },
+    
+    ui = {
+        layouts = {
+            {
+                elements = {
+                    { id = "preview", size = 0.75 },
+                    { id = "pin", size = 0.25 },
+                },
+                position = "right",
+                size = 0.25,
+            },
+            {
+                elements = {
+                    { id = "output", size = 0.65 },
+                    { id = "variables", size = 0.35 },
+                },
+                position = "bottom",
+                size = 0.25,
+            }
+        }
+    },
     
     -- UI Symbols
     ui_symbols = {
