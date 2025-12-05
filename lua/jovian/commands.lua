@@ -254,11 +254,7 @@ function M.setup()
         local id = Utils.get_current_cell_id(nil, false)
         if not id then return vim.notify("No cell found", vim.log.levels.WARN) end
         
-        local filename = vim.fn.expand("%:t")
-        if filename == "" then filename = "scratchpad" end
-        local file_dir = vim.fn.expand("%:p:h")
-        local cache_dir = file_dir .. "/.jovian_cache/" .. filename
-        local md_path = cache_dir .. "/" .. id .. ".md"
+        local md_path = Utils.get_cell_md_path(id)
         
         if vim.fn.filereadable(md_path) == 0 then
             return vim.notify("No output found for cell " .. id, vim.log.levels.WARN)

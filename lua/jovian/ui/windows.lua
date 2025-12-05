@@ -21,6 +21,90 @@ function M.get_or_create_buf(name)
 	return buf
 end
 
+-- Helper to cleanup old buffer if not used elsewhere
+local function cleanup_buffer(old_buf, current_buf)
+    if old_buf and old_buf ~= current_buf and vim.api.nvim_buf_is_valid(old_buf) then
+        -- Safety Check 1: Do not delete modified buffers
+        if vim.api.nvim_buf_get_option(old_buf, "modified") then
+            return
+        end
+
+        -- Safety Check 2: Only delete Jovian-managed buffers
+        local buf_name = vim.api.nvim_buf_get_name(old_buf)
+        -- Check if it's a file in .jovian_cache
+        local is_jovian_cache = buf_name:find(".jovian_cache", 1, true)
+        
+        -- Check if it's a special buffer (like placeholder or terminal)
+        -- We allow deleting nofile/terminal buffers as they are usually ephemeral
+        local buftype = vim.api.nvim_buf_get_option(old_buf, "buftype")
+        local is_ephemeral = (buftype == "nofile" or buftype == "terminal")
+
+        if not (is_jovian_cache or is_ephemeral) then
+            return
+        end
+
+        local wins = vim.fn.win_findbuf(old_buf)
+        if #wins == 0 then
+            vim.api.nvim_buf_delete(old_buf, { force = true })
+        end
+    end
+end
+
+-- Helper to lock window layout to prevent shifts
+local function lock_layout()
+    local wins_to_lock = {}
+    if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
+        table.insert(wins_to_lock, State.win.output)
+    end
+    if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
+        table.insert(wins_to_lock, State.win.variables)
+    end
+    if State.win.preview and vim.api.nvim_win_is_valid(State.win.preview) then
+        table.insert(wins_to_lock, State.win.preview)
+    end
+    
+    local original_opts = {}
+    for _, win in ipairs(wins_to_lock) do
+        original_opts[win] = {
+            wfw = vim.wo[win].winfixwidth,
+            wfh = vim.wo[win].winfixheight
+        }
+        vim.wo[win].winfixwidth = true
+        vim.wo[win].winfixheight = true
+    end
+    return original_opts
+end
+
+-- Helper to unlock window layout
+local function unlock_layout(original_opts)
+    for win, opts in pairs(original_opts) do
+        if vim.api.nvim_win_is_valid(win) then
+            vim.wo[win].winfixwidth = opts.wfw
+            vim.wo[win].winfixheight = opts.wfh
+        end
+    end
+end
+
+-- Helper to apply standard window options
+local function apply_window_options(win, opts)
+    if not vim.api.nvim_win_is_valid(win) then return end
+    
+    local defaults = {
+        number = false,
+        relativenumber = false,
+        signcolumn = "no",
+        foldcolumn = "0",
+        wrap = true,
+        fillchars = "eob: "
+    }
+    
+    opts = vim.tbl_extend("force", defaults, opts or {})
+    
+    for k, v in pairs(opts) do
+        vim.wo[win][k] = v
+    end
+end
+
 function M.open_windows(target_win)
 	-- Get "current" if no argument,
 	-- but ensure target_win is passed if called from toggle_windows
@@ -198,19 +282,10 @@ function M.open_markdown_preview(filepath)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "readonly", true)
 	
-	vim.wo[State.win.preview].wrap = true
+	apply_window_options(State.win.preview, { wrap = true })
 
-    -- Cleanup old buffer if it's different and valid
-    if old_buf and old_buf ~= buf and vim.api.nvim_buf_is_valid(old_buf) then
-        -- Check if it was a jovian preview buffer (optional, but safer)
-        -- For now, we assume anything in the preview window was a preview buffer.
-        
-        -- Check if the buffer is displayed in any other window (e.g. Pin window)
-        local wins = vim.fn.win_findbuf(old_buf)
-        if #wins == 0 then
-            vim.api.nvim_buf_delete(old_buf, { force = true })
-        end
-    end
+    -- Cleanup old buffer
+    cleanup_buffer(old_buf, buf)
 end
 
 function M.toggle_variables_pane()
@@ -252,11 +327,7 @@ function M.toggle_variables_pane()
     vim.api.nvim_win_set_width(State.win.variables, width)
 
     -- Window options
-    local win = State.win.variables
-    vim.wo[win].number = false
-    vim.wo[win].relativenumber = false
-    vim.wo[win].signcolumn = "no"
-    vim.wo[win].wrap = false
+    apply_window_options(State.win.variables, { wrap = false })
     
     -- Initial render
     Renderers.render_variables_pane({})
@@ -307,13 +378,7 @@ function M.open_pin_window()
     vim.api.nvim_win_set_height(State.win.pin, height)
     
     -- Window options
-    local win = State.win.pin
-    vim.wo[win].number = false
-    vim.wo[win].relativenumber = false
-    vim.wo[win].signcolumn = "no"
-    vim.wo[win].foldcolumn = "0"
-    vim.wo[win].fillchars = "eob: "
-    vim.wo[win].wrap = true
+    apply_window_options(State.win.pin, { wrap = true })
     
     -- Restore focus to original window if possible
     if cur_win and vim.api.nvim_win_is_valid(cur_win) then
@@ -332,11 +397,7 @@ function M.open_pin_window()
         
         -- Apply window options again as setting buffer might reset some? No, win options persist.
         -- But let's be safe.
-        local win = State.win.pin
-        vim.wo[win].number = false
-        vim.wo[win].relativenumber = false
-        vim.wo[win].signcolumn = "no"
-        vim.wo[win].wrap = true
+        apply_window_options(State.win.pin, { wrap = true })
     end
 end
 
@@ -369,15 +430,8 @@ function M.pin_cell(filepath)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_buf_set_option(buf, "readonly", true)
     
-    -- Cleanup old buffer if valid and different
-    -- Be careful not to delete the buffer if it's used in preview window!
-    -- Check if old_buf is displayed in any other window
-    if old_buf and old_buf ~= buf and vim.api.nvim_buf_is_valid(old_buf) then
-        local wins = vim.fn.win_findbuf(old_buf)
-        if #wins == 0 then
-            vim.api.nvim_buf_delete(old_buf, { force = true })
-        end
-    end
+    -- Cleanup old buffer
+    cleanup_buffer(old_buf, buf)
 end
 
 function M.unpin()
@@ -394,57 +448,23 @@ function M.unpin()
         vim.api.nvim_buf_set_option(buf, "modifiable", false)
         vim.api.nvim_win_set_buf(State.win.pin, buf)
         
-        local win = State.win.pin
-        vim.wo[win].number = false
-        vim.wo[win].relativenumber = false
-        vim.wo[win].signcolumn = "no"
-        vim.wo[win].wrap = true
+        apply_window_options(State.win.pin, { wrap = true })
         
-        -- Cleanup old buffer if valid and different
-        if old_buf and old_buf ~= buf and vim.api.nvim_buf_is_valid(old_buf) then
-            local wins = vim.fn.win_findbuf(old_buf)
-            if #wins == 0 then
-                vim.api.nvim_buf_delete(old_buf, { force = true })
-            end
-        end
+        -- Cleanup old buffer
+        cleanup_buffer(old_buf, buf)
     end
 end
 
 function M.toggle_pin_window()
     if State.win.pin and vim.api.nvim_win_is_valid(State.win.pin) then
-        -- Capture windows to lock
-        local wins_to_lock = {}
-        if State.win.output and vim.api.nvim_win_is_valid(State.win.output) then
-            table.insert(wins_to_lock, State.win.output)
-        end
-        if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
-            table.insert(wins_to_lock, State.win.variables)
-        end
-        if State.win.preview and vim.api.nvim_win_is_valid(State.win.preview) then
-            table.insert(wins_to_lock, State.win.preview)
-        end
-        
-        -- Lock dimensions
-        local original_opts = {}
-        for _, win in ipairs(wins_to_lock) do
-            original_opts[win] = {
-                wfw = vim.wo[win].winfixwidth,
-                wfh = vim.wo[win].winfixheight
-            }
-            vim.wo[win].winfixwidth = true
-            vim.wo[win].winfixheight = true
-        end
+        -- Lock layout to prevent shifts
+        local layout_lock = lock_layout()
         
         vim.api.nvim_win_close(State.win.pin, true)
         State.win.pin = nil
         
-        -- Restore dimensions
-        for win, opts in pairs(original_opts) do
-            if vim.api.nvim_win_is_valid(win) then
-                vim.wo[win].winfixwidth = opts.wfw
-                vim.wo[win].winfixheight = opts.wfh
-            end
-        end
+        -- Unlock layout
+        unlock_layout(layout_lock)
         
         return
     end
