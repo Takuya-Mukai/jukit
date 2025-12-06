@@ -278,7 +278,7 @@ except:
                     send_json({"type": "clipboard_data", "content": clip_data["content"]})
                 elif 'image/png' in data:
                     img_data = data['image/png']
-                    send_json({"type": "debug", "msg": f"Received image data, length: {len(img_data)}"})
+                    # send_json({"type": "debug", "msg": f"Received image data, length: {len(img_data)}"})
                     self.msg_queue.put({"type": "image", "data": img_data})
                 elif 'text/plain' in data:
                     self.msg_queue.put({"type": "text", "content": data['text/plain'] + "\n"})
@@ -370,7 +370,7 @@ except:
                 if item["type"] == "image":
                     img_data_b64 = item["data"]
                     if not img_data_b64:
-                        send_json({"type": "debug", "msg": "Skipping empty image data"})
+                        # send_json({"type": "debug", "msg": "Skipping empty image data"})
                         continue
                         
                     img_filename = f"{self.current_cell_id}_{self.output_counter:02d}.png"
@@ -379,7 +379,7 @@ except:
                     try:
                         decoded_data = base64.b64decode(img_data_b64)
                         if len(decoded_data) == 0:
-                             send_json({"type": "debug", "msg": "Image data decoded to empty bytes"})
+                             # send_json({"type": "debug", "msg": "Image data decoded to empty bytes"})
                              continue
                              
                         with open(img_path, "wb") as f:
@@ -413,9 +413,9 @@ except:
                         match = re.search(r'File "<ipython-input-[^>]+>", line (\d+)', clean_line)
                         if match:
                             line_num = int(match.group(1))
-                            send_json({"type": "debug", "msg": f"Matched line {line_num} in: {clean_line.strip()}"})
+                            # send_json({"type": "debug", "msg": f"Matched line {line_num} in: {clean_line.strip()}"})
                     
-                    send_json({"type": "debug", "msg": f"Final extracted line: {line_num}"})
+                    # send_json({"type": "debug", "msg": f"Final extracted line: {line_num}"})
                     error_info["line"] = line_num
                     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
                     clean_traceback = [ansi_escape.sub('', line) for line in item['traceback']]
@@ -675,7 +675,7 @@ except Exception:
         self.var_msg_id = self.kc.execute(script, silent=False, store_history=True)
 
     def set_plot_mode(self, mode):
-        send_json({"type": "debug", "msg": f"Setting plot mode to: {mode}"})
+        # send_json({"type": "debug", "msg": f"Setting plot mode to: {mode}"})
         
         # Update variable FIRST
         cmd = f"_jovian_plot_mode = '{mode}'\n"
@@ -693,7 +693,7 @@ except Exception:
         
         try:
             valid_set = set(ids)
-            send_json({"type": "debug", "msg": f"Purging cache in {file_dir}, valid ids: {len(valid_set)}"})
+            # send_json({"type": "debug", "msg": f"Purging cache in {file_dir}, valid ids: {len(valid_set)}"})
             
             for f in os.listdir(file_dir):
                 # Files: {id}.md, {id}_{counter}.png
@@ -713,11 +713,13 @@ except Exception:
                 if file_id and file_id not in valid_set:
                     try:
                         os.remove(os.path.join(file_dir, f))
-                        send_json({"type": "debug", "msg": f"Deleted stale cache: {f}"})
+                        # send_json({"type": "debug", "msg": f"Deleted stale cache: {f}"})
                     except Exception as e:
-                        send_json({"type": "debug", "msg": f"Failed to delete {f}: {e}"})
+                        pass
+                        # send_json({"type": "debug", "msg": f"Failed to delete {f}: {e}"})
         except Exception as e:
-            send_json({"type": "debug", "msg": f"Purge error: {e}"})
+            pass
+            # send_json({"type": "debug", "msg": f"Purge error: {e}"})
 
     def remove_cache(self, ids, file_dir):
         if not file_dir or not os.path.exists(file_dir): return
@@ -736,7 +738,7 @@ except Exception:
                 if file_id and file_id in remove_set:
                     try: 
                         os.remove(os.path.join(file_dir, f))
-                        send_json({"type": "debug", "msg": f"Removed cache: {f}"})
+                        # send_json({"type": "debug", "msg": f"Removed cache: {f}"})
                     except: pass
         except:
             pass
@@ -749,7 +751,7 @@ def main():
     bridge = KernelBridge(connection_file=args.connection_file)
     bridge.start()
     
-    send_json({"type": "debug", "msg": "Kernel Bridge Started"})
+    # send_json({"type": "debug", "msg": "Kernel Bridge Started"})
 
     while True:
         try:

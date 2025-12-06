@@ -134,7 +134,7 @@ function M.start_kernel(on_ready)
                     State.job_id = nil
                 end,
             })
-            UI.append_to_repl("[Jovian Kernel Started]")
+            -- UI.append_to_repl("[Jovian Kernel Started]")
             vim.defer_fn(function()
                 Session.clean_stale_cache()
                 -- Refresh variables pane if open
