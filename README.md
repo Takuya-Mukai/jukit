@@ -130,8 +130,8 @@ require("jovian").setup({
     -- UI Symbols (Virtual Text)
     ui_symbols = {
         running = " Running...",
-        done = " Done",
-        error = "✘ Error",
+        done = " Done",
+        error = " Error",
         interrupted = " Interrupted",
     },
 
