@@ -1,9 +1,6 @@
 local M = {}
 local Config = require("jovian.config")
 local Core = require("jovian.core")
-local M = {}
-local Config = require("jovian.config")
-local Core = require("jovian.core")
 local Session = require("jovian.session")
 
 function M.setup(opts)

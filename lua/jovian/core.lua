@@ -2,7 +2,6 @@ local M = {}
 local State = require("jovian.state")
 local Config = require("jovian.config")
 local UI = require("jovian.ui")
-local UI = require("jovian.ui")
 local Utils = require("jovian.utils")
 local Cell = require("jovian.cell")
 local Session = require("jovian.session")

@@ -2,7 +2,6 @@ local M = {}
 local Config = require("jovian.config")
 local State = require("jovian.state")
 local Windows = require("jovian.ui.windows")
-local Windows = require("jovian.ui.windows")
 local Renderers = require("jovian.ui.renderers")
 
 -- Helper to lock window layout to prevent shifts
@@ -39,32 +38,8 @@ local function unlock_layout(original_opts)
         end
     end
 end
--- We need to access Elements from Windows module, or define them here.
--- Since Elements use Windows functions, and Windows functions use Elements (in open_layout),
--- we have a circular dependency if we are not careful.
--- `open_layout` was in `windows.lua`.
--- `Elements` was local in `windows.lua`.
--- Let's redefine Elements here but use Windows functions.
--- Or better, expose Elements in Windows?
--- Actually, `open_layout` is the main user of `Elements`.
--- `open_windows` calls `open_layout`.
--- If `open_windows` stays in `windows.lua`, it needs `open_layout`.
--- So `windows.lua` depends on `layout.lua`.
--- `layout.lua` depends on `windows.lua` (for `get_or_create_buf` etc).
--- This is circular.
-
--- Solution:
--- Move `Elements` and `open_layout` and `resize_windows` to `layout.lua`.
--- `open_windows` moves to `layout.lua` too?
--- `open_windows` is high level.
--- `windows.lua` should be low level (buffer/window creation).
--- `layout.lua` should be high level (orchestration).
--- So `open_windows`, `toggle_windows`, `open_pin_window` should move to `layout.lua`.
--- `windows.lua` keeps `get_or_create_buf`, `cleanup_buffer`, `lock_layout`, `apply_window_options`, `close_windows`?
--- `close_windows` iterates State.win.
--- `toggle_windows` calls `close_windows` or `open_windows`.
-
--- Let's move high-level logic to `layout.lua`.
+-- Window Elements Definitions
+-- These define how to open and setup specific UI components
 
 local Elements = {
     preview = {

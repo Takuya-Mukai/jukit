@@ -97,10 +97,27 @@ You can configure `jovian.nvim` by passing a table to the `setup` function.
 ```lua
 require("jovian").setup({
     -- UI Settings
-    preview_width_percent = 30,
-    repl_height_percent = 25,
-    vars_pane_width_percent = 25, -- Width of the variables pane (% of editor width)
-    toggle_var = true, -- If true, Vars pane opens/closes with JovianToggle/JovianOpen
+    -- UI Layouts (Flexible Window Management)
+    ui = {
+        layouts = {
+            {
+                elements = {
+                    { id = "preview", size = 0.75 },
+                    { id = "pin", size = 0.25 },
+                },
+                position = "right",
+                size = 0.25,
+            },
+            {
+                elements = {
+                    { id = "output", size = 0.65 },
+                    { id = "variables", size = 0.35 },
+                },
+                position = "bottom",
+                size = 0.25,
+            }
+        }
+    },
 
     -- UI Symbols (Virtual Text)
     ui_symbols = {
@@ -138,7 +155,7 @@ require("jovian").setup({
 
 `jovian.nvim` creates a hidden directory named `.jovian_cache` in **the same directory as the file you are editing**. This directory stores intermediate files and metadata.
 
-**Automatic Cleanup**: The plugin automatically removes cache directories for files that no longer exist when you open or close Neovim. You can also trigger this manually with `:JovianCleanCache`.
+**Automatic Cleanup**: The plugin automatically removes cache directories for files that no longer exist when you open or close Neovim. You can also trigger this manually with `:JovianClean!`.
 
 **Recommendation**: Add this directory to your `.gitignore` (globally or per-project) to keep your repository clean.
 
@@ -147,8 +164,7 @@ require("jovian").setup({
 ```
 
 ### Key Options
-- **`toggle_var`**: When set to `true`, the Variables Pane will automatically open and close alongside the REPL and Preview windows when you use `JovianToggle` or `JovianOpen`.
-- **`vars_pane_width_percent`**: Controls the width of the Variables Pane as a percentage of the total editor width.
+- **`ui.layouts`**: Define the window layout. You can configure multiple split areas (right, bottom, left, top) and the elements within them (preview, output, variables, pin).
 - **`ui_symbols`**: Customize the text/icons displayed for cell status.
 - **`python_interpreter`**: Defaults to `"python3"`. This works seamlessly with virtual environments.
 
@@ -165,7 +181,7 @@ require("jovian").setup({
 ### UI & Layout
 - **`:JovianOpen`**: Open the Jovian UI (REPL, Preview, and optionally Vars Pane).
 - **`:JovianToggle`**: Toggle the visibility of the Jovian UI.
-- **`:JovianClear`**: Clear the REPL output.
+- **`:JovianClearREPL`**: Clear the REPL output.
 - **`:JovianToggleVars`**: Manually toggle the Variables Pane.
 - **`:JovianTogglePlot`**: Toggle between inline and window plot view modes. In window mode, plots are displayed in an external window (via TkAgg) while still being captured for the preview pane.
 
@@ -199,7 +215,8 @@ require("jovian").setup({
 - **`:JovianPeek [obj]`**: Peek at an object's value/info.
 - **`:JovianProfile`**: Run the current cell with profiling enabled.
 - **`:JovianBackend`**: Print the current Matplotlib backend to the REPL.
-- **`:JovianCleanCache`**: Manually clean up orphaned cache directories.
+- **`:JovianClean`**: Clean stale caches for the current buffer. Use `:JovianClean!` to also remove orphaned caches globally.
+- **`:JovianClearCache`**: Clear cache for the current cell. Use `:JovianClearCache!` to clear cache for all cells in the current buffer.
 - **`:JovianClearDiag`**: Clear diagnostics from the current buffer.
 
 ## 🖥️ UI Layout

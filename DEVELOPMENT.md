@@ -12,14 +12,15 @@ The core logic is located in `lua/jovian/`:
 - **`backend/kernel_bridge.py`**: The Python script that runs on the target host (local or remote). It wraps an `IPython.interactive` shell, captures I/O, and communicates with Neovim via JSON messages. It also handles plot display, supporting both inline images and external windows (via TkAgg) simultaneously.
 - **`handlers.lua`**: Contains handler functions for processing messages received from the Python kernel.
 - **`hosts.lua`**: Manages host configurations (Local/SSH), persistence, and validation.
+- **`cell.lua`**: Encapsulates cell-related logic (ID generation, range calculation, operations).
+- **`session.lua`**: Manages session state, cache cleaning, and structure checking.
 - **`ui.lua`**: The main UI module. Acts as a facade for UI submodules.
-    - **`ui/windows.lua`**: Manages Windows and Buffers (REPL, Preview, Vars Pane).
+    - **`ui/layout.lua`**: High-level UI orchestration (Open, Toggle, Resize).
+    - **`ui/windows.lua`**: Low-level Window and Buffer management.
     - **`ui/renderers.lua`**: Handles rendering of content (Variables, Dataframes).
     - **`ui/virtual_text.lua`**: Manages virtual text and extmarks.
     - **`ui/shared.lua`**: Shared UI utilities to avoid circular dependencies.
-- **`utils.lua`**: Utility functions for text manipulation.
-    - Cell parsing (finding ranges).
-    - Cell operations (Delete, Move, Split).
+- **`utils.lua`**: General utility functions (re-exports `cell.lua` for compatibility).
 - **`config.lua`**: Defines default configuration options.
 - **`diagnostics.lua`**: Handles LSP diagnostic filtering (suppressing errors for magic commands).
 - **`jovian_queries/`**: Contains custom TreeSitter queries for syntax highlighting (injections and highlights).
@@ -41,7 +42,7 @@ The core logic is located in `lua/jovian/`:
 
 - **Cache Management**:
     - Cache is stored in `.jovian_cache/` relative to the source file.
-    - **Orphaned Cache Cleanup**: `core.lua` contains `clean_orphaned_caches` which scans the cache directory and removes subdirectories corresponding to missing source files. This is triggered on `VimEnter`, `VimLeavePre`, and via `:JovianCleanCache`.
+    - **Orphaned Cache Cleanup**: `session.lua` contains `clean_orphaned_caches` which scans the cache directory and removes subdirectories corresponding to missing source files. This is triggered on `VimEnter`, `VimLeavePre`, and via `:JovianClean!`.
 
 ## 🤝 Contribution Guide
 
@@ -62,9 +63,10 @@ If you want to add a new cell operation (e.g., `JovianSplitCell`), follow these 
 
 Tests are located in the `tests/` directory. They are simple Lua scripts that mock the Neovim API or run within a Neovim instance to verify functionality.
 
-To run a verification script:
+To run verification scripts:
 ```bash
-nvim -l tests/verify_command_cleanup.lua
+nvim -l test_commands.lua
+nvim -l test_resize_layout.lua
 ```
 
 ## ⚠️ Known Issues & Development Notes
