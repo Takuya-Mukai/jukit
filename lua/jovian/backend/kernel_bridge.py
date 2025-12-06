@@ -23,13 +23,20 @@ def send_json(msg):
     sys.stdout.write(json.dumps(msg) + "\n")
     sys.stdout.flush()
 
+# ANSI escape code pattern (compiled once)
+_ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
 def process_console_output(text):
     # Simple terminal emulator for \r and \n to handle progress bars (tqdm)
+    
+    # Strip ANSI codes first to avoid garbage in text block
+    clean_text = _ansi_escape.sub('', text)
+
     lines = [[]]
     row = 0
     col = 0
     
-    for char in text:
+    for char in clean_text: # Process clean_text, not original text
         if char == '\n':
             row += 1
             col = 0
@@ -62,11 +69,15 @@ class KernelBridge:
         self.km = None
         self.kc = None
         self.running = False
-        self.msg_queue = queue.Queue()
         self.execution_queue = queue.Queue()
+        self.msg_queue = queue.Queue()
         self.current_cell_id = None
-        self.current_msg_id = None 
+        self.current_msg_id = None
         self.var_msg_id = None
+        
+        # Stream state tracking for tqdm fix
+        self.last_stream_type = None
+        self.last_stream_tail = None
         self.output_counter = 0
         self.save_dir = None
 
@@ -211,10 +222,30 @@ except:
             if msg_type == 'stream':
                 text = content['text']
                 name = content['name'] # stdout or stderr
-                # Forward to Neovim immediately for REPL
-                send_json({"type": "stream", "text": text, "stream": name})
+                
+                # Fix for tqdm: If switching from stderr (no newline) to stdout, inject newline
+                # But ignore trailing ANSI codes (like reset codes)
+                if name == 'stdout' and self.last_stream_type == 'stderr':
+                    if not self._ends_with_newline(self.last_stream_tail):
+                        # text = "\n" + text # DO NOT modify text sent to Neovim (shared.lua handles it)
+                        pass
+
                 # Queue for Markdown report
-                self.msg_queue.put({"type": "text", "content": text})
+                markdown_text = text
+                if name == 'stdout' and self.last_stream_type == 'stderr':
+                     if not self._ends_with_newline(self.last_stream_tail):
+                         markdown_text = "\n" + text
+
+                # Forward to Neovim immediately for REPL
+                # We send the ORIGINAL text because shared.lua implements its own fix.
+                send_json({"type": "stream", "text": text, "stream": name})
+                
+                self.msg_queue.put({"type": "text", "content": markdown_text})
+
+                # Update state
+                self.last_stream_type = name
+                if text:
+                    self.last_stream_tail = text[-50:] if len(text) > 50 else text
 
             elif msg_type == 'execute_result':
                 data = content['data']
@@ -464,6 +495,16 @@ except:
             self.msg_queue.queue.clear()
             
         self.current_msg_id = self.kc.execute(code)
+
+    def _ends_with_newline(self, text):
+        if not text:
+            return False
+        # Strip ANSI codes
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        clean_text = ansi_escape.sub('', text)
+        if not clean_text:
+            return False
+        return clean_text.endswith('\n')
 
     def execute_code(self, code, cell_id, file_dir=None, cwd=None):
         if self.current_cell_id is not None:

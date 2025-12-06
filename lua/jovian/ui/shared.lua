@@ -99,8 +99,31 @@ function M.append_stream_text(text, stream_type)
 	-- nvim_open_term handles \r and \n automatically,
 	-- so just send it as is!
 
-	-- However, converting Unix newline (\n) to terminal newline (\r\n) prevents display issues
-	-- (IPython often sends \r\n already, but just in case)
+    local function ends_with_newline(str)
+        if not str or str == "" then return false end
+        -- Strip ANSI codes (simple approximation for CSI codes)
+        local stripped = str:gsub("\27%[[0-9;]*m", "")
+        -- Only consider \n as newline. \r means cursor is at start of line, 
+        -- so we need to inject \n to preserve the line content.
+        return stripped:sub(-1) == "\n"
+    end
+
+    -- Fix for tqdm: If switching from stderr (no newline) to stdout, inject newline
+    if stream_type == "stdout" and State.last_stream_type == "stderr" then
+        if not ends_with_newline(State.last_stream_tail) then
+            text = "\r\n" .. text
+        end
+    end
+
+    -- Update state
+    State.last_stream_type = stream_type
+    if #text > 0 then
+        -- Keep last 50 chars to capture potential newlines hidden by ANSI codes
+        local tail = text
+        if #tail > 50 then tail = tail:sub(-50) end
+        State.last_stream_tail = tail
+    end
+
 	local clean_text = text:gsub("\n", "\r\n")
 
 	-- Red for stderr
