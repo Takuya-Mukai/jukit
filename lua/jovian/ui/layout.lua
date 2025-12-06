@@ -38,6 +38,17 @@ local function unlock_layout(original_opts)
         end
     end
 end
+
+local function get_effective_height()
+    local h = vim.o.lines - vim.o.cmdheight
+    if vim.o.showtabline == 2 or (vim.o.showtabline == 1 and #vim.api.nvim_list_tabpages() > 1) then
+        h = h - 1
+    end
+    if vim.o.laststatus == 3 then
+        h = h - 1
+    end
+    return h
+end
 -- Window Elements Definitions
 -- These define how to open and setup specific UI components
 
@@ -120,7 +131,7 @@ function M.open_layout(layout, parent_win)
     -- Handle percentage size
     if type(size) == "number" and size > 0 and size < 1 then
         if pos == "top" or pos == "bottom" then
-            size = math.floor(vim.o.lines * size)
+            size = math.floor(get_effective_height() * size)
         else
             size = math.floor(vim.o.columns * size)
         end
@@ -153,7 +164,7 @@ function M.open_layout(layout, parent_win)
     local is_vertical_stack = (pos == "left" or pos == "right")
     local total_pixels = 0
     if is_vertical_stack then
-        total_pixels = vim.api.nvim_win_get_height(main_win)
+        total_pixels = get_effective_height()
     else
         total_pixels = vim.api.nvim_win_get_width(main_win)
     end
@@ -188,6 +199,9 @@ function M.open_layout(layout, parent_win)
     end
     
     -- Resize elements
+    -- Sort by size (descending) so larger windows are resized first, allowing smaller ones (last) to enforce size
+    table.sort(created_wins, function(a, b) return a.size > b.size end)
+
     for _, item in ipairs(created_wins) do
         local win = item.win
         if vim.api.nvim_win_is_valid(win) then
@@ -292,7 +306,7 @@ function M.resize_windows()
                 if is_vertical_stack then
                     container_size = math.floor(vim.o.columns * size)
                 else
-                    container_size = math.floor(vim.o.lines * size)
+                    container_size = math.floor(get_effective_height() * size)
                 end
             end
             
@@ -307,26 +321,24 @@ function M.resize_windows()
             end
             
             local total_pixels = 0
-            for _, item in ipairs(active_wins) do
-                if is_vertical_stack then
-                    total_pixels = total_pixels + vim.api.nvim_win_get_height(item.win)
-                else
+            if is_vertical_stack then
+                total_pixels = get_effective_height()
+            else
+                for _, item in ipairs(active_wins) do
                     total_pixels = total_pixels + vim.api.nvim_win_get_width(item.win)
                 end
-            end
-            
-            if total_pixels == 0 then
-                 if is_vertical_stack then
-                    total_pixels = vim.o.lines - vim.o.cmdheight - 1
-                 else
+                if total_pixels == 0 then
                     total_pixels = vim.o.columns
-                 end
+                end
             end
             
             local total_units = 0
             for _, item in ipairs(active_wins) do
                 total_units = total_units + item.size
             end
+            
+            -- Sort by size (descending)
+            table.sort(active_wins, function(a, b) return a.size > b.size end)
             
             for _, item in ipairs(active_wins) do
                 local ratio = item.size / total_units
@@ -387,7 +399,7 @@ function M.open_pin_window()
     vim.cmd("belowright split")
     State.win.pin = vim.api.nvim_get_current_win()
     
-    local height = math.floor(vim.o.lines * 0.3)
+    local height = math.floor(get_effective_height() * 0.3)
     vim.api.nvim_win_set_height(State.win.pin, height)
     
     Windows.apply_window_options(State.win.pin, { wrap = true })
