@@ -52,7 +52,7 @@
                 window_overlap_clear_enabled = true,
               })
             end
-            
+
 
 
             -- Setup jovian.nvim
@@ -63,6 +63,17 @@
             vim.opt.number = true
             vim.opt.termguicolors = true
             vim.cmd("colorscheme habamax")
+
+            vim.diagnostic.config({
+              virtual_text = true,
+              signs = true,
+              underline = true,
+              update_in_insert = false,
+            })
+            vim.lsp.config("pyright", {})
+            vim.lsp.config("ruff", {})
+            vim.lsp.enable("pyright")
+            vim.lsp.enable("ruff")
           '';
 
           neovimWithPlugins = pkgs.neovim.override {
@@ -72,7 +83,7 @@
                 start = [
                   pkgs.vimPlugins.image-nvim
                   pkgs.vimPlugins.jupytext-nvim
-
+                  pkgs.vimPlugins.nvim-lspconfig
                 ];
               };
             };
@@ -115,6 +126,8 @@
             packages = [
               self.packages.${system}.nvim-jovian
               pkgs.imagemagick
+              pkgs.pyright
+              pkgs.ruff
               pythonEnv
             ];
 
