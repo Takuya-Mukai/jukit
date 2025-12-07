@@ -83,25 +83,57 @@ function M._prepare_kernel_command(script_path)
 end
 
 function M.sync_backend(host, backend_dir, on_success, on_error)
-    -- 1. Remove old remote directory
-    vim.fn.jobstart(string.format("ssh %s 'rm -rf /tmp/jovian_backend && mkdir -p /tmp/jovian_backend'", host), {
+    -- Calculate local hash
+    local hash_cmd = "sha256sum " .. backend_dir .. "/* | sha256sum | awk '{print $1}'"
+    local local_hash = vim.fn.trim(vim.fn.system(hash_cmd))
+    
+    -- Check remote hash
+    local check_cmd = string.format("ssh %s 'cat /tmp/jovian_backend/.hash 2>/dev/null'", host)
+    
+    local function do_sync()
+        -- Sync files and update hash
+        local setup_cmd = string.format("ssh %s 'rm -rf /tmp/jovian_backend && mkdir -p /tmp/jovian_backend'", host)
+        
+        vim.fn.jobstart(setup_cmd, {
+            on_exit = function(_, code)
+                if code ~= 0 then
+                    if on_error then on_error("Failed to prepare remote directory on " .. host) end
+                    return
+                end
+                
+                local scp_cmd = string.format("scp -r %s/. %s:/tmp/jovian_backend", backend_dir, host)
+                vim.fn.jobstart(scp_cmd, {
+                    on_exit = function(_, scp_code)
+                        if scp_code ~= 0 then
+                            if on_error then on_error("Failed to sync backend to " .. host) end
+                        else
+                            -- Write hash file
+                            local hash_write_cmd = string.format("ssh %s 'echo %s > /tmp/jovian_backend/.hash'", host, local_hash)
+                            vim.fn.jobstart(hash_write_cmd, {
+                                on_exit = function()
+                                    if on_success then on_success() end
+                                end
+                            })
+                        end
+                    end
+                })
+            end
+        })
+    end
+
+    vim.fn.jobstart(check_cmd, {
+        stdout_buffered = true,
+        on_stdout = function(_, data)
+            if data and data[1] and vim.trim(data[1]) == local_hash then
+                if on_success then on_success() end
+            else
+                do_sync()
+            end
+        end,
         on_exit = function(_, code)
             if code ~= 0 then
-                if on_error then on_error("Failed to prepare remote directory on " .. host) end
-                return
+                do_sync()
             end
-            
-            -- 2. Copy contents
-            local scp_cmd = string.format("scp -r %s/. %s:/tmp/jovian_backend", backend_dir, host)
-            vim.fn.jobstart(scp_cmd, {
-                on_exit = function(_, scp_code)
-                    if scp_code ~= 0 then
-                        if on_error then on_error("Failed to sync backend to " .. host) end
-                    else
-                        if on_success then on_success() end
-                    end
-                end
-            })
         end
     })
 end
@@ -135,21 +167,9 @@ function M.start_kernel(on_ready)
                 end,
             })
             -- UI.append_to_repl("[Jovian Kernel Started]")
-            vim.defer_fn(function()
-                Session.clean_stale_cache()
-                -- Refresh variables pane if open
-                if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
-                    M.show_variables()
-                end
-                
-                -- Initialize plot mode from config
-                if Config.options.plot_view_mode then
-                    local msg = vim.json.encode({ command = "set_plot_mode", mode = Config.options.plot_view_mode })
-                    vim.api.nvim_chan_send(State.job_id, msg .. "\n")
-                end
-                
-                if on_ready then on_ready() end
-            end, 500)
+            if on_ready then
+                table.insert(State.on_ready_callbacks, on_ready)
+            end
         end
 
         if Config.options.ssh_host then

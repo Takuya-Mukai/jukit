@@ -29,4 +29,6 @@ M.cell_status_extmarks = {} -- { [cell_id] = extmark_id }
 M.cell_hashes = {} -- { [cell_id] = hash_string }
 M.cell_start_line = {} -- { cell_id: line_num }
 
+M.on_ready_callbacks = {} -- List of functions to call when kernel is ready
+
 return M

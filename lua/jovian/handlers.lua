@@ -16,6 +16,25 @@ function M.handle_debug(msg)
     UI.append_to_repl("[Debug]: " .. msg.msg, "Comment")
 end
 
+function M.handle_ready(msg)
+    -- Execute all registered callbacks
+    for _, callback in ipairs(State.on_ready_callbacks) do
+        callback()
+    end
+    State.on_ready_callbacks = {}
+
+    -- Initial setup
+    Session.clean_stale_cache()
+    if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
+        require("jovian.core").show_variables()
+    end
+    
+    if Config.options.plot_view_mode then
+        local init_msg = vim.json.encode({ command = "set_plot_mode", mode = Config.options.plot_view_mode })
+        vim.api.nvim_chan_send(State.job_id, init_msg .. "\n")
+    end
+end
+
 
 function M.handle_execution_started(msg)
     UI.append_to_repl({ "In [" .. msg.cell_id .. "]:" }, "Type")

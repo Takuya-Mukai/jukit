@@ -34,6 +34,7 @@ The core logic is located in `lua/jovian/`:
 - **`utils.lua`**: General utility functions (re-exports `cell.lua` for compatibility).
 - **`config.lua`**: Defines default configuration options.
 - **`diagnostics.lua`**: Handles LSP diagnostic filtering (suppressing errors for magic commands).
+- **`health.lua`**: Implements the `:checkhealth jovian` logic.
 - **`jovian_queries/`**: Contains custom TreeSitter queries for syntax highlighting (injections and highlights).
 
 ### Key Concepts
@@ -47,7 +48,9 @@ The core logic is located in `lua/jovian/`:
         - We use `priority` 105 to ensure our highlights override the default Python highlights.
 - **Remote Execution Architecture**:
     - **Connection**: We use `ssh` to connect to remote hosts.
-    - **Backend Deployment**: The `lua/jovian/backend/` directory is automatically copied (scp) to the remote host (`~/.jovian/backend/`) upon connection.
+    - **Backend Deployment**: The `lua/jovian/backend/` directory is synchronized to the remote host (`/tmp/jovian_backend/`).
+        - **Hash-based Sync**: We calculate a SHA256 hash of the local backend files. We compare this with a remote `.hash` file. Files are only transferred (scp) if the hashes differ, ensuring fast connection times.
+    - **Startup Handshake**: Upon launch, `kernel_bridge.py` sends a `{"type": "ready"}` message. Neovim waits for this signal before sending initial configuration (like plot mode) to avoid race conditions.
     - **Communication**: Neovim communicates with the remote `kernel_bridge.py` via the SSH process's stdin/stdout.
     - **File Sync**: Generated files (images, markdown) are synced back to the local machine via `scp` for preview.
 

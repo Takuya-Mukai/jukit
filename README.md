@@ -145,18 +145,66 @@ map("n", "[c", "<cmd>JovianPrevCell<CR>", { desc = "Prev Cell" })
 
 ```lua
 require("jovian").setup({
-    ui = {
-        transparent_float = false,
-        winblend = 0,
-        layouts = { ... }
-    },
-    ui_symbols = {
-        running = " Running...",
-        done = " Done",
-        error = " Error",
-    },
-    python_interpreter = "python3",
-    notify_mode = "all", -- "all", "error", "none"
+	-- Visuals
+	flash_highlight_group = "Visual",
+	flash_duration = 300,
+	float_border = "rounded", -- Border style for floating windows (single, double, rounded, solid, shadow)
+
+	-- Python Environment
+	python_interpreter = "python3",
+
+	-- Behavior
+	notify_threshold = 10,
+	notify_mode = "all", -- "all", "error", "none"
+	show_execution_time = true,
+	plot_view_mode = "inline", -- "inline", "window"
+
+	options = {
+		python_interpreter = "python3",
+		adjust_window_size = true,
+		max_output_lines = 1000,
+	},
+
+	ui = {
+		transparent_float = false,
+		winblend = 0,
+		layouts = {
+			{
+				elements = {
+					{ id = "preview", size = 0.75 },
+					{ id = "pin", size = 0.25 },
+				},
+				position = "right",
+				size = 0.25,
+			},
+			{
+				elements = {
+					{ id = "output", size = 0.65 },
+					{ id = "variables", size = 0.35 },
+				},
+				position = "bottom",
+				size = 0.25,
+			},
+		},
+	},
+
+	-- UI Symbols
+	ui_symbols = {
+		running = " Running...",
+		done = " Done",
+		error = " Error",
+		interrupted = " Interrupted",
+		stale = " Stale",
+	},
+
+	-- Magic Commands
+	suppress_magic_command_errors = true,
+
+	-- TreeSitter
+	treesitter = {
+		markdown_injection = true,
+		magic_command_highlight = true,
+	},
 })
 ```
 </details>
@@ -243,6 +291,14 @@ This keeps Neovim responsive while heavy computations run in the background.
 | `:JovianAddLocal` | Add local config |
 | `:JovianUse` | Switch host |
 | `:JovianRemoveHost` | Remove host |
+</details>
+
+<details>
+<summary>Diagnostics</summary>
+
+| Command | Description |
+| :--- | :--- |
+| `:checkhealth jovian` | Run health checks |
 </details>
 
 ---

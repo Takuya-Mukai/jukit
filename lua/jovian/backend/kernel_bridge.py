@@ -108,6 +108,9 @@ class KernelBridge:
         self.iopub_thread = threading.Thread(target=self._poll_iopub, daemon=True)
         self.iopub_thread.start()
 
+        # Signal readiness
+        send_json({"type": "ready"})
+
     def _inject_runtime(self):
         script = """
 import sys
@@ -201,6 +204,22 @@ except:
             self.kc.stop_channels()
         if self.km:
             self.km.shutdown_kernel()
+
+    def interrupt(self):
+        try:
+            if self.km:
+                self.km.interrupt_kernel()
+                # send_json({"type": "debug", "msg": "Interrupted local kernel"})
+            elif self.kc:
+                # For remote/existing kernels, we can try sending an interrupt message
+                # but it's not always supported or reliable via KC alone.
+                # Ideally, we should have a way to signal the kernel process.
+                # For now, we just log.
+                send_json({"type": "debug", "msg": "Interrupting remote/existing kernel is best-effort"})
+                # Attempt to send interrupt request if supported by protocol (rare)
+                pass
+        except Exception as e:
+            send_json({"type": "error", "msg": f"Failed to interrupt: {e}"})
 
     def _poll_iopub(self):
         while self.running:
@@ -784,8 +803,11 @@ def main():
             elif cmd.get("command") == "remove_cache":
                 bridge.remove_cache(cmd["ids"], cmd.get("file_dir"))
             
-        except (json.JSONDecodeError, KeyboardInterrupt):
+        except (json.JSONDecodeError):
             pass
+        except KeyboardInterrupt:
+            # Handle SIGINT from Neovim
+            bridge.interrupt()
             
     bridge.stop()
 
