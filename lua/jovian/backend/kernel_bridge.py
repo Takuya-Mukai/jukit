@@ -1,66 +1,72 @@
-import sys
-import json
+import argparse
 import base64
+import json
 import os
 import queue
+import re
+import sys
 import threading
 import time
-import re
-import argparse
 
 try:
-    from jupyter_client.manager import KernelManager
     from jupyter_client.blocking.client import BlockingKernelClient
+    from jupyter_client.manager import KernelManager
 except ImportError as e:
     # Handle environment issues (common on NixOS/Linux with missing libs)
     sys.stderr.write(f"[Jovian] Critical Import Error: {e}\n")
     if "libstdc++.so.6" in str(e):
-        sys.stderr.write("[Jovian] Tip: You are missing 'libstdc++.so.6'. If on NixOS, use 'nix-shell' or set LD_LIBRARY_PATH.\n")
+        sys.stderr.write(
+            "[Jovian] Tip: You are missing 'libstdc++.so.6'. If on NixOS, use 'nix-shell' or set LD_LIBRARY_PATH.\n"
+        )
     sys.exit(1)
+
 
 # --- Protocol Utils ---
 def send_json(msg):
     sys.stdout.write(json.dumps(msg) + "\n")
     sys.stdout.flush()
 
+
 # ANSI escape code pattern (compiled once)
-_ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+_ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
 
 def process_console_output(text):
     # Simple terminal emulator for \r and \n to handle progress bars (tqdm)
-    
+
     # Strip ANSI codes first to avoid garbage in text block
-    clean_text = _ansi_escape.sub('', text)
+    clean_text = _ansi_escape.sub("", text)
 
     lines = [[]]
     row = 0
     col = 0
-    
-    for char in clean_text: # Process clean_text, not original text
-        if char == '\n':
+
+    for char in clean_text:  # Process clean_text, not original text
+        if char == "\n":
             row += 1
             col = 0
             if len(lines) <= row:
                 lines.append([])
-        elif char == '\r':
+        elif char == "\r":
             col = 0
-        elif char == '\b':
+        elif char == "\b":
             col = max(0, col - 1)
         else:
             # Ensure line exists (handled by \n logic, but first line is pre-created)
             current_line = lines[row]
             # Pad if needed
             while len(current_line) < col:
-                current_line.append(' ')
-            
+                current_line.append(" ")
+
             if len(current_line) == col:
                 current_line.append(char)
             else:
                 current_line[col] = char
             col += 1
-    
+
     # Join lines
     return "\n".join(["".join(line) for line in lines])
+
 
 # --- Kernel Bridge ---
 class KernelBridge:
@@ -74,7 +80,7 @@ class KernelBridge:
         self.current_cell_id = None
         self.current_msg_id = None
         self.var_msg_id = None
-        
+
         # Stream state tracking for tqdm fix
         self.last_stream_type = None
         self.last_stream_tail = None
@@ -89,7 +95,15 @@ class KernelBridge:
             self.kc.start_channels()
         else:
             # Start new local kernel
-            self.km = KernelManager(kernel_cmd=[sys.executable, "-m", "ipykernel_launcher", "-f", "{connection_file}"])
+            self.km = KernelManager(
+                kernel_cmd=[
+                    sys.executable,
+                    "-m",
+                    "ipykernel_launcher",
+                    "-f",
+                    "{connection_file}",
+                ]
+            )
             self.km.start_kernel()
             self.kc = self.km.client()
             self.kc.start_channels()
@@ -101,9 +115,9 @@ class KernelBridge:
             return
 
         self.running = True
-        
+
         self._inject_runtime()
-        
+
         # Start a thread to poll IOPub messages
         self.iopub_thread = threading.Thread(target=self._poll_iopub, daemon=True)
         self.iopub_thread.start()
@@ -215,7 +229,12 @@ except:
                 # but it's not always supported or reliable via KC alone.
                 # Ideally, we should have a way to signal the kernel process.
                 # For now, we just log.
-                send_json({"type": "debug", "msg": "Interrupting remote/existing kernel is best-effort"})
+                send_json(
+                    {
+                        "type": "debug",
+                        "msg": "Interrupting remote/existing kernel is best-effort",
+                    }
+                )
                 # Attempt to send interrupt request if supported by protocol (rare)
                 pass
         except Exception as e:
@@ -232,33 +251,33 @@ except:
                 pass
 
     def _handle_iopub_msg(self, msg):
-        msg_type = msg['header']['msg_type']
-        content = msg['content']
-        parent_id = msg['parent_header'].get('msg_id')
-        
+        msg_type = msg["header"]["msg_type"]
+        content = msg["content"]
+        parent_id = msg["parent_header"].get("msg_id")
+
         # Only process messages corresponding to the current execution
         if self.current_msg_id and parent_id == self.current_msg_id:
-            if msg_type == 'stream':
-                text = content['text']
-                name = content['name'] # stdout or stderr
-                
+            if msg_type == "stream":
+                text = content["text"]
+                name = content["name"]  # stdout or stderr
+
                 # Fix for tqdm: If switching from stderr (no newline) to stdout, inject newline
                 # But ignore trailing ANSI codes (like reset codes)
-                if name == 'stdout' and self.last_stream_type == 'stderr':
+                if name == "stdout" and self.last_stream_type == "stderr":
                     if not self._ends_with_newline(self.last_stream_tail):
                         # text = "\n" + text # DO NOT modify text sent to Neovim (shared.lua handles it)
                         pass
 
                 # Queue for Markdown report
                 markdown_text = text
-                if name == 'stdout' and self.last_stream_type == 'stderr':
-                     if not self._ends_with_newline(self.last_stream_tail):
-                         markdown_text = "\n" + text
+                if name == "stdout" and self.last_stream_type == "stderr":
+                    if not self._ends_with_newline(self.last_stream_tail):
+                        markdown_text = "\n" + text
 
                 # Forward to Neovim immediately for REPL
                 # We send the ORIGINAL text because shared.lua implements its own fix.
                 send_json({"type": "stream", "text": text, "stream": name})
-                
+
                 self.msg_queue.put({"type": "text", "content": markdown_text})
 
                 # Update state
@@ -266,86 +285,106 @@ except:
                 if text:
                     self.last_stream_tail = text[-50:] if len(text) > 50 else text
 
-            elif msg_type == 'execute_result':
-                data = content['data']
-                if 'text/plain' in data:
-                    self.msg_queue.put({"type": "text", "content": data['text/plain'] + "\n"})
+            elif msg_type == "execute_result":
+                data = content["data"]
+                if "text/plain" in data:
+                    self.msg_queue.put(
+                        {"type": "text", "content": data["text/plain"] + "\n"}
+                    )
 
-            elif msg_type == 'display_data':
-                data = content['data']
-                if 'application/vnd.jovian.variables+json' in data:
+            elif msg_type == "display_data":
+                data = content["data"]
+                if "application/vnd.jovian.variables+json" in data:
                     # Handle variables list
-                    var_data = data['application/vnd.jovian.variables+json']
-                    send_json({"type": "variable_list", "variables": var_data["variables"]})
-                elif 'application/vnd.jovian.dataframe+json' in data:
+                    var_data = data["application/vnd.jovian.variables+json"]
+                    send_json(
+                        {"type": "variable_list", "variables": var_data["variables"]}
+                    )
+                elif "application/vnd.jovian.dataframe+json" in data:
                     # Handle dataframe data
-                    df_data = data['application/vnd.jovian.dataframe+json']
-                    send_json({
-                        "type": "dataframe_data", 
-                        "name": df_data.get("name"),
-                        "columns": df_data.get("columns", []),
-                        "index": df_data.get("index", []),
-                        "data": df_data.get("data", [])
-                    })
-                elif 'application/vnd.jovian.peek+json' in data:
+                    df_data = data["application/vnd.jovian.dataframe+json"]
+                    send_json(
+                        {
+                            "type": "dataframe_data",
+                            "name": df_data.get("name"),
+                            "columns": df_data.get("columns", []),
+                            "index": df_data.get("index", []),
+                            "data": df_data.get("data", []),
+                        }
+                    )
+                elif "application/vnd.jovian.peek+json" in data:
                     # Handle peek data
-                    peek_data = data['application/vnd.jovian.peek+json']
+                    peek_data = data["application/vnd.jovian.peek+json"]
                     send_json({"type": "peek_data", "data": peek_data})
-                elif 'application/vnd.jovian.clipboard+json' in data:
+                elif "application/vnd.jovian.clipboard+json" in data:
                     # Handle clipboard data
-                    clip_data = data['application/vnd.jovian.clipboard+json']
-                    send_json({"type": "clipboard_data", "content": clip_data["content"]})
-                elif 'image/png' in data:
-                    img_data = data['image/png']
+                    clip_data = data["application/vnd.jovian.clipboard+json"]
+                    send_json(
+                        {"type": "clipboard_data", "content": clip_data["content"]}
+                    )
+                elif "image/png" in data:
+                    img_data = data["image/png"]
                     # send_json({"type": "debug", "msg": f"Received image data, length: {len(img_data)}"})
                     self.msg_queue.put({"type": "image", "data": img_data})
-                elif 'text/plain' in data:
-                    self.msg_queue.put({"type": "text", "content": data['text/plain'] + "\n"})
+                elif "text/plain" in data:
+                    self.msg_queue.put(
+                        {"type": "text", "content": data["text/plain"] + "\n"}
+                    )
 
-            elif msg_type == 'error':
+            elif msg_type == "error":
                 # Forward error to REPL
-                error_text = "\n".join(content['traceback'])
-                send_json({"type": "stream", "text": error_text + "\n", "stream": "stderr"})
-                
-                self.msg_queue.put({
-                    "type": "error", 
-                    "ename": content['ename'], 
-                    "evalue": content['evalue'], 
-                    "traceback": content['traceback']
-                })
-                
-            elif msg_type == 'status':
-                if content['execution_state'] == 'idle':
+                error_text = "\n".join(content["traceback"])
+                send_json(
+                    {"type": "stream", "text": error_text + "\n", "stream": "stderr"}
+                )
+
+                self.msg_queue.put(
+                    {
+                        "type": "error",
+                        "ename": content["ename"],
+                        "evalue": content["evalue"],
+                        "traceback": content["traceback"],
+                    }
+                )
+
+            elif msg_type == "status":
+                if content["execution_state"] == "idle":
                     self._finalize_execution()
 
         elif self.var_msg_id and parent_id == self.var_msg_id:
-            if msg_type == 'display_data':
-                data = content['data']
-                if 'application/vnd.jovian.variables+json' in data:
-                    var_data = data['application/vnd.jovian.variables+json']
-                    send_json({"type": "variable_list", "variables": var_data["variables"]})
-                elif 'application/vnd.jovian.dataframe+json' in data:
-                    df_data = data['application/vnd.jovian.dataframe+json']
-                    send_json({
-                        "type": "dataframe_data", 
-                        "name": df_data.get("name"),
-                        "columns": df_data.get("columns", []),
-                        "index": df_data.get("index", []),
-                        "data": df_data.get("data", [])
-                    })
-                elif 'application/vnd.jovian.peek+json' in data:
-                    peek_data = data['application/vnd.jovian.peek+json']
+            if msg_type == "display_data":
+                data = content["data"]
+                if "application/vnd.jovian.variables+json" in data:
+                    var_data = data["application/vnd.jovian.variables+json"]
+                    send_json(
+                        {"type": "variable_list", "variables": var_data["variables"]}
+                    )
+                elif "application/vnd.jovian.dataframe+json" in data:
+                    df_data = data["application/vnd.jovian.dataframe+json"]
+                    send_json(
+                        {
+                            "type": "dataframe_data",
+                            "name": df_data.get("name"),
+                            "columns": df_data.get("columns", []),
+                            "index": df_data.get("index", []),
+                            "data": df_data.get("data", []),
+                        }
+                    )
+                elif "application/vnd.jovian.peek+json" in data:
+                    peek_data = data["application/vnd.jovian.peek+json"]
                     send_json({"type": "peek_data", "data": peek_data})
-                elif 'application/vnd.jovian.clipboard+json' in data:
-                    clip_data = data['application/vnd.jovian.clipboard+json']
-                    send_json({"type": "clipboard_data", "content": clip_data["content"]})
-            
-            elif msg_type == 'stream':
+                elif "application/vnd.jovian.clipboard+json" in data:
+                    clip_data = data["application/vnd.jovian.clipboard+json"]
+                    send_json(
+                        {"type": "clipboard_data", "content": clip_data["content"]}
+                    )
+
+            elif msg_type == "stream":
                 # For variables, we might not want to forward stdout/stderr to REPL to avoid noise,
                 # but if there's an error it's good to know.
                 pass
-                
-            elif msg_type == 'error':
+
+            elif msg_type == "error":
                 # If variable retrieval fails, we might want to know
                 pass
 
@@ -357,7 +396,7 @@ except:
         output_md_lines = []
         images = {}
         error_info = None
-        
+
         try:
             # Prepare save directory
             save_dir = self.save_dir or os.getcwd()
@@ -370,11 +409,11 @@ except:
 
             while not self.msg_queue.empty():
                 item = self.msg_queue.get()
-                
+
                 if item["type"] == "text":
                     pending_text.append(item["content"])
                     continue
-                
+
                 # Flush pending text before processing other items
                 if pending_text:
                     full_text = "".join(pending_text)
@@ -385,60 +424,86 @@ except:
                         output_md_lines.append("```")
                         output_md_lines.append("")
                     pending_text = []
-                
+
                 if item["type"] == "image":
                     img_data_b64 = item["data"]
                     if not img_data_b64:
                         # send_json({"type": "debug", "msg": "Skipping empty image data"})
                         continue
-                        
-                    img_filename = f"{self.current_cell_id}_{self.output_counter:02d}.png"
+
+                    # Clean up old images for this cell before first write
+                    if self.output_counter == 0:
+                        try:
+                            import glob
+
+                            pattern = os.path.join(
+                                save_dir, f"{self.current_cell_id}_*.png"
+                            )
+                            for old_file in glob.glob(pattern):
+                                try:
+                                    os.remove(old_file)
+                                except:
+                                    pass
+                        except:
+                            pass
+
+                    img_filename = f"{self.current_cell_id}_{int(time.time())}_{self.output_counter:02d}.png"
                     img_path = os.path.join(save_dir, img_filename)
-                    
+
                     try:
                         decoded_data = base64.b64decode(img_data_b64)
                         if len(decoded_data) == 0:
-                             # send_json({"type": "debug", "msg": "Image data decoded to empty bytes"})
-                             continue
-                             
+                            # send_json({"type": "debug", "msg": "Image data decoded to empty bytes"})
+                            continue
+
                         with open(img_path, "wb") as f:
                             f.write(decoded_data)
-                        
+
                         images[img_filename] = img_data_b64
-                        output_md_lines.append(f"![Result]({img_filename}?t={int(time.time())})")
+                        output_md_lines.append(f"![Result]({img_filename})")
                         output_md_lines.append("")
                         self.output_counter += 1
-                        
-                        send_json({
-                            "type": "image_saved",
-                            "path": os.path.abspath(img_path),
-                            "cell_id": self.current_cell_id
-                        })
+
+                        send_json(
+                            {
+                                "type": "image_saved",
+                                "path": os.path.abspath(img_path),
+                                "cell_id": self.current_cell_id,
+                            }
+                        )
                     except Exception as e:
-                        send_json({"type": "error", "msg": f"Failed to save image: {e}"})
+                        send_json(
+                            {"type": "error", "msg": f"Failed to save image: {e}"}
+                        )
 
                 elif item["type"] == "error":
                     error_info = {
                         "msg": f"{item['ename']}: {item['evalue']}",
-                        "traceback": item['traceback']
+                        "traceback": item["traceback"],
                     }
-                    
+
                     # Extract line number from traceback
                     # Look for the last occurrence of a line referring to an ipython input
                     line_num = 1
-                    for line in item['traceback']:
+                    for line in item["traceback"]:
                         # Remove ANSI codes for regex matching
-                        clean_line = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
-                        match = re.search(r'File "<ipython-input-[^>]+>", line (\d+)', clean_line)
+                        clean_line = re.sub(
+                            r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])", "", line
+                        )
+                        match = re.search(
+                            r'File "<ipython-input-[^>]+>", line (\d+)', clean_line
+                        )
                         if match:
                             line_num = int(match.group(1))
                             # send_json({"type": "debug", "msg": f"Matched line {line_num} in: {clean_line.strip()}"})
-                    
+
                     # send_json({"type": "debug", "msg": f"Final extracted line: {line_num}"})
                     error_info["line"] = line_num
-                    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                    clean_traceback = [ansi_escape.sub('', line) for line in item['traceback']]
-                    
+                    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+                    clean_traceback = [
+                        ansi_escape.sub("", line) for line in item["traceback"]
+                    ]
+
                     output_md_lines.append("### Error")
                     output_md_lines.append("```")
                     output_md_lines.append("\n".join(clean_traceback))
@@ -468,21 +533,21 @@ except:
                 "cell_id": self.current_cell_id,
                 "file": os.path.abspath(md_path),
                 "status": "error" if error_info else "ok",
-                "images": images
+                "images": images,
             }
             if error_info:
                 msg["error"] = error_info
-                
+
             send_json(msg)
-            
+
         except Exception:
             pass
-        
+
         # Reset state
         self.current_cell_id = None
-        self.current_msg_id = None 
+        self.current_msg_id = None
         self.output_counter = 0
-        
+
         # Check for pending executions
         self._process_next_in_queue()
 
@@ -490,49 +555,46 @@ except:
         if not self.execution_queue.empty():
             next_cmd = self.execution_queue.get()
             self._do_execute(
-                next_cmd["code"], 
-                next_cmd["cell_id"], 
+                next_cmd["code"],
+                next_cmd["cell_id"],
                 next_cmd.get("file_dir"),
-                next_cmd.get("cwd")
+                next_cmd.get("cwd"),
             )
 
     def _do_execute(self, code, cell_id, file_dir=None, cwd=None):
         self.current_cell_id = cell_id
         self.save_dir = file_dir
-        
+
         # Notify execution started
         send_json({"type": "execution_started", "cell_id": cell_id, "code": code})
-        
+
         # Switch kernel CWD if provided
         if cwd:
-            safe_cwd = cwd.replace('\\', '\\\\').replace("'", "\\'")
+            safe_cwd = cwd.replace("\\", "\\\\").replace("'", "\\'")
             change_cwd_code = f"import os; import sys; os.chdir('{safe_cwd}'); sys.path.insert(0, '{safe_cwd}') if '{safe_cwd}' not in sys.path else None"
             self.kc.execute(change_cwd_code, silent=True)
-        
+
         # Clear queue
         with self.msg_queue.mutex:
             self.msg_queue.queue.clear()
-            
+
         self.current_msg_id = self.kc.execute(code)
 
     def _ends_with_newline(self, text):
         if not text:
             return False
         # Strip ANSI codes
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        clean_text = ansi_escape.sub('', text)
+        ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        clean_text = ansi_escape.sub("", text)
         if not clean_text:
             return False
-        return clean_text.endswith('\n')
+        return clean_text.endswith("\n")
 
     def execute_code(self, code, cell_id, file_dir=None, cwd=None):
         if self.current_cell_id is not None:
-            self.execution_queue.put({
-                "code": code, 
-                "cell_id": cell_id, 
-                "file_dir": file_dir,
-                "cwd": cwd
-            })
+            self.execution_queue.put(
+                {"code": code, "cell_id": cell_id, "file_dir": file_dir, "cwd": cwd}
+            )
         else:
             self._do_execute(code, cell_id, file_dir, cwd)
 
@@ -657,25 +719,27 @@ _jovian_peek("{name}")
         while time.time() - start_time < 2:
             try:
                 reply = self.kc.get_shell_msg(timeout=0.1)
-                if reply['parent_header']['msg_id'] == msg_id:
-                     content = reply['content']
-                     if content['status'] == 'ok' and content['found']:
-                         data = content['data']
-                         docstring = data.get('text/plain', 'No info')
-                         
-                         # Strip ANSI codes
-                         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                         docstring = ansi_escape.sub('', docstring)
-                         
-                         result = {
-                             "name": name,
-                             "type": "unknown", 
-                             "docstring": docstring,
-                             "file": "",
-                             "definition": ""
-                         }
-                         send_json({"type": "inspection_data", "data": result})
-                     return
+                if reply["parent_header"]["msg_id"] == msg_id:
+                    content = reply["content"]
+                    if content["status"] == "ok" and content["found"]:
+                        data = content["data"]
+                        docstring = data.get("text/plain", "No info")
+
+                        # Strip ANSI codes
+                        ansi_escape = re.compile(
+                            r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+                        )
+                        docstring = ansi_escape.sub("", docstring)
+
+                        result = {
+                            "name": name,
+                            "type": "unknown",
+                            "docstring": docstring,
+                            "file": "",
+                            "definition": "",
+                        }
+                        send_json({"type": "inspection_data", "data": result})
+                    return
             except queue.Empty:
                 continue
             except Exception:
@@ -695,40 +759,41 @@ except Exception:
 
     def set_plot_mode(self, mode):
         # send_json({"type": "debug", "msg": f"Setting plot mode to: {mode}"})
-        
+
         # Update variable FIRST
         cmd = f"_jovian_plot_mode = '{mode}'\n"
-        
+
         # Explicitly switch backend based on mode
         if mode == "window":
-             cmd += "try: get_ipython().run_line_magic('matplotlib', 'tk'); print('[Jovian] Switched to tk backend')\nexcept: pass"
+            cmd += "try: get_ipython().run_line_magic('matplotlib', 'tk'); print('[Jovian] Switched to tk backend')\nexcept: pass"
         else:
-             cmd += "try: get_ipython().run_line_magic('matplotlib', 'inline'); print('[Jovian] Switched to inline backend')\nexcept: pass"
+            cmd += "try: get_ipython().run_line_magic('matplotlib', 'inline'); print('[Jovian] Switched to inline backend')\nexcept: pass"
 
         self.kc.execute(cmd, silent=False, store_history=True)
 
     def purge_cache(self, ids, file_dir):
-        if not file_dir or not os.path.exists(file_dir): return
-        
+        if not file_dir or not os.path.exists(file_dir):
+            return
+
         try:
             valid_set = set(ids)
             # send_json({"type": "debug", "msg": f"Purging cache in {file_dir}, valid ids: {len(valid_set)}"})
-            
+
             for f in os.listdir(file_dir):
                 # Files: {id}.md, {id}_{counter}.png
                 # We need to extract the ID from the filename.
                 # Filename format: ID.md or ID_XX.png
-                
+
                 file_id = None
                 if f.endswith(".md"):
                     file_id = f[:-3]
                 elif f.endswith(".png"):
                     # ID_XX.png
                     # Find the last underscore
-                    last_underscore = f.rfind('_')
+                    last_underscore = f.rfind("_")
                     if last_underscore != -1:
                         file_id = f[:last_underscore]
-                
+
                 if file_id and file_id not in valid_set:
                     try:
                         os.remove(os.path.join(file_dir, f))
@@ -741,8 +806,9 @@ except Exception:
             # send_json({"type": "debug", "msg": f"Purge error: {e}"})
 
     def remove_cache(self, ids, file_dir):
-        if not file_dir or not os.path.exists(file_dir): return
-        
+        if not file_dir or not os.path.exists(file_dir):
+            return
+
         try:
             remove_set = set(ids)
             for f in os.listdir(file_dir):
@@ -750,17 +816,19 @@ except Exception:
                 if f.endswith(".md"):
                     file_id = f[:-3]
                 elif f.endswith(".png"):
-                    last_underscore = f.rfind('_')
+                    last_underscore = f.rfind("_")
                     if last_underscore != -1:
                         file_id = f[:last_underscore]
-                
+
                 if file_id and file_id in remove_set:
-                    try: 
+                    try:
                         os.remove(os.path.join(file_dir, f))
                         # send_json({"type": "debug", "msg": f"Removed cache: {f}"})
-                    except: pass
+                    except:
+                        pass
         except:
             pass
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -769,7 +837,7 @@ def main():
 
     bridge = KernelBridge(connection_file=args.connection_file)
     bridge.start()
-    
+
     # send_json({"type": "debug", "msg": "Kernel Bridge Started"})
 
     while True:
@@ -778,13 +846,10 @@ def main():
             if not line:
                 break
             cmd = json.loads(line)
-            
+
             if cmd.get("command") == "execute":
                 bridge.execute_code(
-                    cmd["code"],
-                    cmd["cell_id"],
-                    cmd.get("file_dir"),
-                    cmd.get("cwd")
+                    cmd["code"], cmd["cell_id"], cmd.get("file_dir"), cmd.get("cwd")
                 )
             elif cmd.get("command") == "get_variables":
                 bridge.get_variables()
@@ -802,14 +867,15 @@ def main():
                 bridge.purge_cache(cmd["ids"], cmd.get("file_dir"))
             elif cmd.get("command") == "remove_cache":
                 bridge.remove_cache(cmd["ids"], cmd.get("file_dir"))
-            
-        except (json.JSONDecodeError):
+
+        except json.JSONDecodeError:
             pass
         except KeyboardInterrupt:
             # Handle SIGINT from Neovim
             bridge.interrupt()
-            
+
     bridge.stop()
+
 
 if __name__ == "__main__":
     main()
