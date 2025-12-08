@@ -18,10 +18,11 @@ M.defaults = {
 	plot_view_mode = "inline", -- "inline", "window"
 
 	ui = {
-		-- transparent_float = false,
-        -- When true, highlights the entire line width (creating a separator bar).
-        -- When false, highlights only the text (standard boolean match).
-        full_line_cell_highlight = true,
+		-- cell_separator_highlight:
+        -- "line"  : Highlight the entire line (default).
+        -- "text"  : Highlight only the text.
+        -- "none"  : No highlight.
+        cell_separator_highlight = "text",
 		-- winblend = 0,
 		layouts = {
 			{

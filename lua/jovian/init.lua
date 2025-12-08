@@ -127,28 +127,39 @@ function M.setup(opts)
     vim.api.nvim_create_autocmd({ "BufWinEnter", "FileType" }, {
         pattern = "*",
         callback = function()
-            if vim.bo.filetype == "python" then
-                -- Cleanup any existing buffer-local autocmds for highlighting (e.g. from previous mode)
+			if vim.bo.filetype == "python" then
+				local mode = Config.options.ui.cell_separator_highlight
+
+                -- 1. Cleanup existing highlighting (Extmarks & Matchadd)
+                
+                -- Cleanup buffer-local autocmds (for extmark updates)
                 if vim.b.jovian_highlight_augroup then
                     pcall(vim.api.nvim_del_augroup_by_id, vim.b.jovian_highlight_augroup)
                     vim.b.jovian_highlight_augroup = nil
                 end
 
-                -- Method 1: full line highlight via extmarks
-                if Config.options.ui.full_line_cell_highlight then
-                    -- Clear matchadd if exists (switching modes)
-                    if vim.w.jovian_cell_match_id then
-                        pcall(vim.fn.matchdelete, vim.w.jovian_cell_match_id)
-                        vim.w.jovian_cell_match_id = nil
-                    end
+                -- Cleanup matchadd (window-local)
+                if vim.w.jovian_cell_match_id then
+                    pcall(vim.fn.matchdelete, vim.w.jovian_cell_match_id)
+                    vim.w.jovian_cell_match_id = nil
+                end
+                
+                -- Cleanup extmarks (buffer-local)
+                local ns_id = vim.api.nvim_create_namespace("jovian_cells")
+                vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
 
-                    local ns_id = vim.api.nvim_create_namespace("jovian_cells")
+                -- 2. Apply new highlighting
+                if mode == "text" then
+                    vim.w.jovian_cell_match_id = vim.fn.matchadd("JovianCellMarker", "^# %%\\+.*")
+                
+                elseif mode == "line" then
                     local function update_extmarks()
-                        vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
+                        local current_ns = vim.api.nvim_create_namespace("jovian_cells")
+                        vim.api.nvim_buf_clear_namespace(0, current_ns, 0, -1)
                         local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
                         for i, line in ipairs(lines) do
                             if line:match("^# %%") then
-                                vim.api.nvim_buf_set_extmark(0, ns_id, i - 1, 0, {
+                                vim.api.nvim_buf_set_extmark(0, current_ns, i - 1, 0, {
                                     line_hl_group = "JovianCellMarker",
                                     priority = 200,
                                 })
@@ -158,7 +169,6 @@ function M.setup(opts)
                     
                     update_extmarks()
                     
-                    -- Update on change
                     local augroup = vim.api.nvim_create_augroup("JovianCellHighlight_" .. vim.api.nvim_get_current_buf(), { clear = true })
                     vim.b.jovian_highlight_augroup = augroup
                     
@@ -167,23 +177,8 @@ function M.setup(opts)
                         buffer = 0,
                         callback = update_extmarks,
                     })
-
-                -- Method 2: text only highlight via matchadd (default)
-                else
-                    -- Clear extmarks if exists (switching modes)
-                    local ns_id = vim.api.nvim_create_namespace("jovian_cells")
-                    vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
-
-                    -- Clear existing match if any to prevent duplicates
-                    if vim.w.jovian_cell_match_id then
-                        pcall(vim.fn.matchdelete, vim.w.jovian_cell_match_id)
-                        vim.w.jovian_cell_match_id = nil
-                    end
-                    
-                    -- Add new match
-                    vim.w.jovian_cell_match_id = vim.fn.matchadd("JovianCellMarker", "^# %%\\+.*")
                 end
-            end
+			end
         end,
     })
 end
