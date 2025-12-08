@@ -122,6 +122,70 @@ function M.setup(opts)
             require("jovian.ui").resize_windows()
         end,
     })
+
+    -- Add: Highlight cell separators
+    vim.api.nvim_create_autocmd({ "BufWinEnter", "FileType" }, {
+        pattern = "*",
+        callback = function()
+            if vim.bo.filetype == "python" then
+                -- Cleanup any existing buffer-local autocmds for highlighting (e.g. from previous mode)
+                if vim.b.jovian_highlight_augroup then
+                    pcall(vim.api.nvim_del_augroup_by_id, vim.b.jovian_highlight_augroup)
+                    vim.b.jovian_highlight_augroup = nil
+                end
+
+                -- Method 1: full line highlight via extmarks
+                if Config.options.ui.full_line_cell_highlight then
+                    -- Clear matchadd if exists (switching modes)
+                    if vim.w.jovian_cell_match_id then
+                        pcall(vim.fn.matchdelete, vim.w.jovian_cell_match_id)
+                        vim.w.jovian_cell_match_id = nil
+                    end
+
+                    local ns_id = vim.api.nvim_create_namespace("jovian_cells")
+                    local function update_extmarks()
+                        vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
+                        local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+                        for i, line in ipairs(lines) do
+                            if line:match("^# %%") then
+                                vim.api.nvim_buf_set_extmark(0, ns_id, i - 1, 0, {
+                                    line_hl_group = "JovianCellMarker",
+                                    priority = 200,
+                                })
+                            end
+                        end
+                    end
+                    
+                    update_extmarks()
+                    
+                    -- Update on change
+                    local augroup = vim.api.nvim_create_augroup("JovianCellHighlight_" .. vim.api.nvim_get_current_buf(), { clear = true })
+                    vim.b.jovian_highlight_augroup = augroup
+                    
+                    vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+                        group = augroup,
+                        buffer = 0,
+                        callback = update_extmarks,
+                    })
+
+                -- Method 2: text only highlight via matchadd (default)
+                else
+                    -- Clear extmarks if exists (switching modes)
+                    local ns_id = vim.api.nvim_create_namespace("jovian_cells")
+                    vim.api.nvim_buf_clear_namespace(0, ns_id, 0, -1)
+
+                    -- Clear existing match if any to prevent duplicates
+                    if vim.w.jovian_cell_match_id then
+                        pcall(vim.fn.matchdelete, vim.w.jovian_cell_match_id)
+                        vim.w.jovian_cell_match_id = nil
+                    end
+                    
+                    -- Add new match
+                    vim.w.jovian_cell_match_id = vim.fn.matchadd("JovianCellMarker", "^# %%\\+.*")
+                end
+            end
+        end,
+    })
 end
 
 return M

@@ -216,7 +216,9 @@ function M.show_variables(vars, force_float)
 
 	vim.wo[win].wrap = false
 	vim.wo[win].cursorline = true
-    vim.wo[win].winblend = Config.options.ui.winblend
+    if Config.options.ui.winblend then
+        vim.wo[win].winblend = Config.options.ui.winblend
+    end
 	vim.wo[win].winhighlight = "NormalFloat:JovianFloat,FloatBorder:JovianFloatBorder"
 
 	local opts = { noremap = true, silent = true }
@@ -246,8 +248,11 @@ function M.show_profile_stats(text)
 		border = Config.options.float_border,
 		title = " cProfile Stats ",
 		title_pos = "center",
+		title_pos = "center",
 	})
-    vim.wo[win].winblend = Config.options.ui.winblend
+    if Config.options.ui.winblend then
+        vim.wo[win].winblend = Config.options.ui.winblend
+    end
 	vim.wo[win].winhighlight = "NormalFloat:JovianFloat,FloatBorder:JovianFloatBorder"
 	local opts = { noremap = true, silent = true }
 	vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)
@@ -346,7 +351,9 @@ function M.show_dataframe(data)
 	})
 	vim.wo[win].wrap = false
 	vim.wo[win].cursorline = true
-    vim.wo[win].winblend = Config.options.ui.winblend
+    if Config.options.ui.winblend then
+        vim.wo[win].winblend = Config.options.ui.winblend
+    end
 	vim.wo[win].winhighlight = "NormalFloat:JovianFloat,FloatBorder:JovianFloatBorder"
 	local opts = { noremap = true, silent = true }
 	vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)
@@ -406,7 +413,9 @@ function M.show_inspection(data)
 		title = " Jovian Doc ",
 		title_pos = "center",
 	})
-    vim.wo[win].winblend = Config.options.ui.winblend
+    if Config.options.ui.winblend then
+        vim.wo[win].winblend = Config.options.ui.winblend
+    end
     vim.wo[win].winhighlight = "NormalFloat:JovianFloat,FloatBorder:JovianFloatBorder"
 	local opts = { noremap = true, silent = true }
 	vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)
@@ -457,7 +466,9 @@ function M.show_peek(data)
 		title = " Jovian Peek ",
 		title_pos = "center",
 	})
-    vim.wo[win].winblend = Config.options.ui.winblend
+    if Config.options.ui.winblend then
+        vim.wo[win].winblend = Config.options.ui.winblend
+    end
     vim.wo[win].winhighlight = "NormalFloat:JovianFloat,FloatBorder:JovianFloatBorder"
 	local opts = { noremap = true, silent = true }
 	vim.api.nvim_buf_set_keymap(buf, "n", "q", ":close<CR>", opts)

@@ -159,23 +159,20 @@ require("jovian").setup({
 	show_execution_time = true,
 	plot_view_mode = "inline", -- "inline", "window"
 
-	options = {
-		python_interpreter = "python3",
-		adjust_window_size = true,
-		max_output_lines = 1000,
-	},
-
 	ui = {
-		transparent_float = false,
-		winblend = 0,
+		-- transparent_float = false,
+        -- When true, highlights the entire line width (creating a separator bar).
+        -- When false, highlights only the text (standard boolean match).
+        full_line_cell_highlight = true,
+		-- winblend = 0,
 		layouts = {
 			{
 				elements = {
 					{ id = "preview", size = 0.75 },
-					{ id = "pin", size = 0.25 },
+					{ id = "pin", size = 0.30 },
 				},
 				position = "right",
-				size = 0.25,
+				size = 0.30,
 			},
 			{
 				elements = {
@@ -338,6 +335,7 @@ Override these highlight groups to match your theme:
 | :--- | :--- |
 | `JovianFloat`, `JovianFloatBorder` | Floating windows |
 | `JovianHeader`, `JovianSeparator` | Table elements |
+| `JovianCellMarker` | Cell separator highlight (`# %%`) |
 | `JovianVariable`, `JovianType`, `JovianValue` | Variables pane |
 
 ---
