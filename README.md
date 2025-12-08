@@ -164,7 +164,7 @@ require("jovian").setup({
         -- "line"  : Highlight the entire line (default).
         -- "text"  : Highlight only the text.
         -- "none"  : No highlight.
-        cell_separator_highlight = "line",
+        cell_separator_highlight = "text",
 		-- winblend = 0,
 		layouts = {
 			{
