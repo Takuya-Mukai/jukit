@@ -1,15 +1,3 @@
-local M = {}
-
-M.python_injections = [[
-; extends
-
-((comment) @injection.content
- (#match? @injection.content "^# ")
- (#set! injection.language "markdown")
- (#offset! @injection.content 0 2 0 0))
-]]
-
-M.python_highlights = [[
 ;; extends
 
 ;; Highlight the ERROR node itself if it looks like a magic command
@@ -48,6 +36,3 @@ M.python_highlights = [[
   (#same-line? @magic_start @function.macro)
   (#set! "priority" 105)
 )
-]]
-
-return M
