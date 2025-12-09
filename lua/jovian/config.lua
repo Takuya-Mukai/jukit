@@ -30,8 +30,9 @@ M.defaults = {
 					{ id = "preview", size = 0.75 },
 					{ id = "pin", size = 0.30 },
 				},
-				position = "right",
-				size = 0.30,
+				-- position: "left", "right", "top", "bottom"
+				position = "left",
+				size = 0.40,
 			},
 			{
 				elements = {

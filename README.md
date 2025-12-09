@@ -172,7 +172,7 @@ require("jovian").setup({
 					{ id = "preview", size = 0.75 },
 					{ id = "pin", size = 0.30 },
 				},
-				position = "right",
+				position = "right", -- "left", "top", "bottom"
 				size = 0.30,
 			},
 			{
