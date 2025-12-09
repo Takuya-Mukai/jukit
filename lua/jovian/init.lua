@@ -9,69 +9,70 @@ function M.setup(opts)
 	require("jovian.highlights").setup()
 
 	-- TreeSitter Queries
-    local Queries = require("jovian.treesitter_queries")
-    
+	local Queries = require("jovian.treesitter_queries")
+
 	-- Helper to extend queries rather than override
 	local function extend_query(lang, name, extension)
-		if not extension then return end
-		
-        -- If user provided a string, we want to append it to existing queries.
-        -- vim.treesitter.query.set() OVERRIDES everything.
-        -- So we must fetch standard files, read them, concat, and then set.
-        
-        local files = vim.treesitter.query.get_files(lang, name)
-        local query_content = ""
-        for _, file in ipairs(files) do
-            local f = io.open(file, "r")
-            if f then
-                query_content = query_content .. f:read("*a") .. "\n"
-                f:close()
-            end
-        end
-        
-        -- Append our extension
-        query_content = query_content .. extension
-        
-        vim.treesitter.query.set(lang, name, query_content)
-        print("DEBUG: Query set for " .. lang .. "/" .. name .. ". Total length: " .. #query_content) -- 3. 最終長さを確認
+		if not extension then
+			return
+		end
+
+		-- If user provided a string, we want to append it to existing queries.
+		-- vim.treesitter.query.set() OVERRIDES everything.
+		-- So we must fetch standard files, read them, concat, and then set.
+
+		local files = vim.treesitter.query.get_files(lang, name)
+		local query_content = ""
+		for _, file in ipairs(files) do
+			local f = io.open(file, "r")
+			if f then
+				query_content = query_content .. f:read("*a") .. "\n"
+				f:close()
+			end
+		end
+
+		-- Append our extension
+		query_content = query_content .. extension
+
+		vim.treesitter.query.set(lang, name, query_content)
 	end
-    
+
 	if vim.treesitter.query.set and vim.treesitter.query.get_files then
-        local md_opt = Config.options.treesitter.markdown_injection
-        if md_opt then
-            local query = (type(md_opt) == "string") and md_opt or Queries.python_injections
-            extend_query("python", "injections", query)
-        end
-        
-        local magic_opt = Config.options.treesitter.magic_command_highlight
-        if magic_opt then
-            local query = (type(magic_opt) == "string") and magic_opt or Queries.python_highlights
-            extend_query("python", "highlights", query)
-        end
+		local md_opt = Config.options.treesitter.markdown_injection
+		if md_opt then
+			local query = (type(md_opt) == "string") and md_opt or Queries.python_injections
+			extend_query("python", "injections", query)
+		end
+
+		local magic_opt = Config.options.treesitter.magic_command_highlight
+		if magic_opt then
+			local query = (type(magic_opt) == "string") and magic_opt or Queries.python_highlights
+			extend_query("python", "highlights", query)
+		end
 	end
-		-- vim.opt.rtp:prepend(queries_path)
+	-- vim.opt.rtp:prepend(queries_path)
 
-		-- Register custom predicate for magic command highlighting
-		local ok, err = pcall(function()
-			vim.treesitter.query.add_predicate("same-line?", function(match, pattern, bufnr, predicate)
-				local node1 = match[predicate[2]]
-				local node2 = match[predicate[3]]
-				if not node1 or not node2 then
-					return false
-				end
+	-- Register custom predicate for magic command highlighting
+	local ok, err = pcall(function()
+		vim.treesitter.query.add_predicate("same-line?", function(match, pattern, bufnr, predicate)
+			local node1 = match[predicate[2]]
+			local node2 = match[predicate[3]]
+			if not node1 or not node2 then
+				return false
+			end
 
-				if type(node1) == "table" then
-					node1 = node1[1]
-				end
-				if type(node2) == "table" then
-					node2 = node2[1]
-				end
+			if type(node1) == "table" then
+				node1 = node1[1]
+			end
+			if type(node2) == "table" then
+				node2 = node2[1]
+			end
 
-				local r1, _, _, _ = node1:range()
-				local r2, _, _, _ = node2:range()
-				return r1 == r2
-			end, true) -- force=true to overwrite if exists
-		end)
+			local r1, _, _, _ = node1:range()
+			local r2, _, _, _ = node2:range()
+			return r1 == r2
+		end, true) -- force=true to overwrite if exists
+	end)
 
 	-- Register Commands
 	require("jovian.commands").setup()
