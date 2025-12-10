@@ -89,7 +89,7 @@ function M.show_variables(vars, force_float)
 	-- If persistent pane is open, render there
 	if State.win.variables and vim.api.nvim_win_is_valid(State.win.variables) then
 		M.render_variables_pane(vars)
-		vim.notify("Variables updated in pane", vim.log.levels.INFO)
+		-- vim.notify("Variables updated in pane", vim.log.levels.INFO) -- Silenced
 
 		if not force_float then
 			return

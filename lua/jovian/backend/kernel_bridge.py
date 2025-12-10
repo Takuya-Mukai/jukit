@@ -8,6 +8,9 @@ import sys
 import threading
 import time
 
+import signal
+import atexit
+
 try:
     from jupyter_client.blocking.client import BlockingKernelClient
     from jupyter_client.manager import KernelManager
@@ -88,6 +91,11 @@ class KernelBridge:
         self.save_dir = None
 
     def start(self):
+        # Register cleanup handlers
+        atexit.register(self.cleanup)
+        signal.signal(signal.SIGINT, self.cleanup_signal)
+        signal.signal(signal.SIGTERM, self.cleanup_signal)
+
         if self.connection_file:
             # Connect to existing kernel
             self.kc = BlockingKernelClient(connection_file=self.connection_file)
@@ -124,6 +132,20 @@ class KernelBridge:
 
         # Signal readiness
         send_json({"type": "ready"})
+
+    def cleanup_signal(self, signum, frame):
+        # send_json({"type": "debug", "msg": f"Received signal {signum}, cleaning up..."})
+        self.cleanup()
+        sys.exit(0)
+
+    def cleanup(self):
+        self.running = False
+        if self.km:
+            # Ensure we shut down the kernel process we started
+            # send_json({"type": "debug", "msg": "Shutting down managed kernel..."})
+            self.km.shutdown_kernel(now=True)
+        elif self.kc:
+            self.kc.stop_channels()
 
     def _inject_runtime(self):
         script = """

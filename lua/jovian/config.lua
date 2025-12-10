@@ -36,8 +36,8 @@ M.defaults = {
 			},
 			{
 				elements = {
-					{ id = "output", size = 0.65 },
-					{ id = "variables", size = 0.35 },
+					{ id = "output", size = 0.60 },
+					{ id = "variables", size = 0.40 },
 				},
 				position = "bottom",
 				size = 0.25,
