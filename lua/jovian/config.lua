@@ -32,7 +32,7 @@ M.defaults = {
 				},
 				-- position: "left", "right", "top", "bottom"
 				position = "left",
-				size = 0.40,
+				size = 0.35,
 			},
 			{
 				elements = {

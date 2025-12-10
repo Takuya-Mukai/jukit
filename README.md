@@ -27,15 +27,15 @@
 
 ## ✨ Features
 
-| Feature | Description |
-| :--- | :--- |
-| **🚀 Interactive Execution** | Run code cells (`# %%`) or selections instantly. |
-| **👀 Live Preview** | See results (text & plots) in a side-by-side preview window. |
-| **📊 Variables Pane** | Monitor active variables, their types, and values in real-time. |
-| **🖼️ Plot Support** | View Matplotlib/Plotly plots directly in Neovim (via `image.nvim`). |
-| **☁️ Remote & Local** | Seamlessly connect to local kernels or **remote SSH hosts**. |
-| **🎨 Smart UI** | Auto-resizing windows, virtual text status, and transparent UI options. |
-| **⚡ Magic Commands** | Full support for `%timeit`, `!ls`, and other IPython magics. |
+| Feature                      | Description                                                             |
+| :--------------------------- | :---------------------------------------------------------------------- |
+| **🚀 Interactive Execution** | Run code cells (`# %%`) or selections instantly.                        |
+| **👀 Live Preview**          | See results (text & plots) in a side-by-side preview window.            |
+| **📊 Variables Pane**        | Monitor active variables, their types, and values in real-time.         |
+| **🖼️ Plot Support**          | View Matplotlib/Plotly plots directly in Neovim (via `image.nvim`).     |
+| **☁️ Remote & Local**        | Seamlessly connect to local kernels or **remote SSH hosts**.            |
+| **🎨 Smart UI**              | Auto-resizing windows, virtual text status, and transparent UI options. |
+| **⚡ Magic Commands**        | Full support for `%timeit`, `!ls`, and other IPython magics.            |
 
 ---
 
@@ -80,10 +80,10 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
     config = function()
         -- Setup image.nvim (adjust backend to your terminal)
         require("image").setup({
-            backend = "kitty", 
+            backend = "kitty",
             processor = "magick_cli",
             max_width_window_percentage = 100,
-            max_height_window_percentage = 30,
+            max_height_window_percentage = 100,
             window_overlap_clear_enabled = true,
         })
 
@@ -100,16 +100,19 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 ## 🎮 Usage Guide
 
 ### Running Code
+
 - Define cells with `# %%`
 - Run with `:JovianRun` — output appears in the Preview Window
 - Check virtual text status (`Running`, `Done`) on cell headers
 
 ### Working with Data
+
 - `:JovianVars` — View active variables
 - `:JovianView` — Inspect DataFrames in a floating window
 - `:JovianDoc <obj>` / `:JovianPeek <obj>` — View docstrings or quick values
 
 ### Remote Development (SSH)
+
 1. `:JovianAddHost my-server user@1.2.3.4 /usr/bin/python3`
 2. `:JovianUse my-server`
 3. Code runs remotely, results display locally!
@@ -208,6 +211,7 @@ require("jovian").setup({
     },
 })
 ```
+
 </details>
 
 ## 🌲 TreeSitter Queries
@@ -239,6 +243,7 @@ This keeps Neovim responsive while heavy computations run in the background.
 When using `jovian.nvim` with a remote host (SSH), the **Python Kernel runs on the remote machine**.
 
 This means:
+
 1.  **Code Execution**: Your code is sent from Neovim to the remote kernel as text.
 2.  **File Access**: If your code reads a file (e.g., `pd.read_csv("./data.csv")`), the kernel looks for it **on the remote file system**.
 
@@ -250,12 +255,14 @@ This means:
 2.  **If the path does NOT exist**: The kernel stays in its default directory (usually `$HOME`). Relative paths will likely fail.
 
 **Recommendation:**
-*   **Create the same directory structure** on the remote server as your local machine.
-*   **Transfer your data** to the remote server at that location.
+
+- **Create the same directory structure** on the remote server as your local machine.
+- **Transfer your data** to the remote server at that location.
 
 **Example:**
-*   Local: `/home/user/project/data.csv`
-*   Remote: `/home/user/project/data.csv`
+
+- Local: `/home/user/project/data.csv`
+- Remote: `/home/user/project/data.csv`
 
 You can use `rsync`, `scp`, or mount the local directory to the remote server (reverse sshfs) to keep them in sync.
 
@@ -266,76 +273,82 @@ You can use `rsync`, `scp`, or mount the local directory to the remote server (r
 <details>
 <summary>Execution Commands</summary>
 
-| Command | Description |
-| :--- | :--- |
-| `:JovianRun` | Run current cell |
-| `:JovianRunAndNext` | Run and jump to next |
-| `:JovianRunAll` | Run all cells |
-| `:JovianRunAbove` | Run cells up to current |
-| `:JovianRunLine` | Run current line |
-| `:JovianSendSelection` | Run selection |
-| `:JovianStart` | Start kernel |
-| `:JovianRestart` | Restart kernel |
-| `:JovianInterrupt` | Interrupt execution |
+| Command                | Description             |
+| :--------------------- | :---------------------- |
+| `:JovianRun`           | Run current cell        |
+| `:JovianRunAndNext`    | Run and jump to next    |
+| `:JovianRunAll`        | Run all cells           |
+| `:JovianRunAbove`      | Run cells up to current |
+| `:JovianRunLine`       | Run current line        |
+| `:JovianSendSelection` | Run selection           |
+| `:JovianStart`         | Start kernel            |
+| `:JovianRestart`       | Restart kernel          |
+| `:JovianInterrupt`     | Interrupt execution     |
+
 </details>
 
 <details>
 <summary>UI & Layout Commands</summary>
 
-| Command | Description |
-| :--- | :--- |
-| `:JovianOpen` | Open full UI |
-| `:JovianToggle` | Toggle UI |
-| `:JovianClearREPL` | Clear REPL |
-| `:JovianToggleVars` | Toggle Variables |
-| `:JovianTogglePlot` | Toggle plot mode |
+| Command                       | Description      |
+| :---------------------------- | :--------------- |
+| `:JovianOpen`                 | Open full UI     |
+| `:JovianToggle`               | Toggle UI        |
+| `:JovianClearREPL`            | Clear REPL       |
+| `:JovianToggleVars`           | Toggle Variables |
+| `:JovianTogglePlot`           | Toggle plot mode |
 | `:JovianPin` / `:JovianUnpin` | Pin/unpin output |
+
 </details>
 
 <details>
 <summary>Cell Management Commands</summary>
 
-| Command | Description |
-| :--- | :--- |
-| `:JovianNextCell` / `:JovianPrevCell` | Navigate cells |
-| `:JovianNewCellBelow` / `:JovianNewCellAbove` | Insert cell |
-| `:JovianDeleteCell` | Delete cell |
-| `:JovianMoveCellUp` / `:JovianMoveCellDown` | Move cell |
-| `:JovianMergeBelow` | Merge cells |
-| `:JovianSplitCell` | Split cell |
+| Command                                       | Description    |
+| :-------------------------------------------- | :------------- |
+| `:JovianNextCell` / `:JovianPrevCell`         | Navigate cells |
+| `:JovianNewCellBelow` / `:JovianNewCellAbove` | Insert cell    |
+| `:JovianDeleteCell`                           | Delete cell    |
+| `:JovianMoveCellUp` / `:JovianMoveCellDown`   | Move cell      |
+| `:JovianMergeBelow`                           | Merge cells    |
+| `:JovianSplitCell`                            | Split cell     |
+
 </details>
 
 <details>
 <summary>Data & Inspection Commands</summary>
 
-| Command | Description |
-| :--- | :--- |
-| `:JovianVars` | Show variables |
-| `:JovianView [var]` | View DataFrame |
+| Command             | Description       |
+| :------------------ | :---------------- |
+| `:JovianVars`       | Show variables    |
+| `:JovianView [var]` | View DataFrame    |
 | `:JovianCopy [var]` | Copy to clipboard |
-| `:JovianDoc [obj]` | View docstring |
-| `:JovianPeek [obj]` | Quick peek |
-| `:JovianProfile` | Profile cell |
-| `:JovianClean(!)` | Clean caches |
+| `:JovianDoc [obj]`  | View docstring    |
+| `:JovianPeek [obj]` | Quick peek        |
+| `:JovianProfile`    | Profile cell      |
+| `:JovianClean(!)`   | Clean caches      |
+
 </details>
 
 <details>
 <summary>Host Management Commands</summary>
 
-| Command | Description |
-| :--- | :--- |
-| `:JovianAddHost` | Add SSH host |
-| `:JovianAddLocal` | Add local config |
-| `:JovianUse` | Switch host |
-| `:JovianRemoveHost` | Remove host |
+| Command             | Description      |
+| :------------------ | :--------------- |
+| `:JovianAddHost`    | Add SSH host     |
+| `:JovianAddLocal`   | Add local config |
+| `:JovianUse`        | Switch host      |
+| `:JovianRemoveHost` | Remove host      |
+
 </details>
 
 <details>
 <summary>Diagnostics</summary>
 
-| Command | Description |
-| :--- | :--- |
+| Command               | Description       |
+| :-------------------- | :---------------- |
 | `:checkhealth jovian` | Run health checks |
+
 </details>
 
 ---
@@ -344,15 +357,16 @@ You can use `rsync`, `scp`, or mount the local directory to the remote server (r
 
 Override these highlight groups to match your theme:
 
-| Group | Purpose |
-| :--- | :--- |
-| `JovianFloat`, `JovianFloatBorder` | Floating windows |
-| `JovianHeader`, `JovianSeparator` | Table elements |
-| `JovianCellMarker` | Cell separator highlight (`# %%`) |
-| `JovianVariable`, `JovianType`, `JovianValue` | Variables pane |
+| Group                                         | Purpose                           |
+| :-------------------------------------------- | :-------------------------------- |
+| `JovianFloat`, `JovianFloatBorder`            | Floating windows                  |
+| `JovianHeader`, `JovianSeparator`             | Table elements                    |
+| `JovianCellMarker`                            | Cell separator highlight (`# %%`) |
+| `JovianVariable`, `JovianType`, `JovianValue` | Variables pane                    |
 
 ---
 
 ## 🙏 Acknowledgements
 
 This plugin is inspired by **[vim-jukit](https://github.com/luk400/vim-jukit)**.
+

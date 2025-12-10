@@ -48,7 +48,7 @@
                 backend = "kitty",
                 processor = "magick_cli",
                 max_width_window_percentage = 100,
-                max_height_window_percentage = 30,
+                max_height_window_percentage = 100,
                 window_overlap_clear_enabled = true,
               })
             end
