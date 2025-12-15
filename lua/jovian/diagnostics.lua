@@ -26,38 +26,35 @@ local function filter_diagnostics(err, result, ctx, config, next_handler)
 	for _, diagnostic in ipairs(result.diagnostics) do
 		local keep = true
 
-		-- Treat nil severity as Error (or just check all)
-		local severity = diagnostic.severity or vim.diagnostic.severity.ERROR
 
-		if severity == vim.diagnostic.severity.ERROR then
-			local lnum = diagnostic.range.start.line
-			local line = nil
+		-- Check all diagnostics regardless of severity
+		local lnum = diagnostic.range.start.line
+		local line = nil
 
-			-- Try to get line from buffer
-			if vim.api.nvim_buf_is_loaded(bufnr) then
-				local lines = vim.api.nvim_buf_get_lines(bufnr, lnum, lnum + 1, false)
-				line = lines[1]
-			else
-				-- Fallback: read from file if buffer not loaded
-				-- This is expensive but necessary if diagnostics arrive before buffer load
-				local filename = vim.api.nvim_buf_get_name(bufnr)
-				if filename ~= "" then
-					local lines = vim.fn.readfile(filename, "", lnum + 1)
-					if #lines > lnum then
-						line = lines[lnum + 1]
-					end
+		-- Try to get line from buffer
+		if vim.api.nvim_buf_is_loaded(bufnr) then
+			local lines = vim.api.nvim_buf_get_lines(bufnr, lnum, lnum + 1, false)
+			line = lines[1]
+		else
+			-- Fallback: read from file if buffer not loaded
+			-- This is expensive but necessary if diagnostics arrive before buffer load
+			local filename = vim.api.nvim_buf_get_name(bufnr)
+			if filename ~= "" then
+				local lines = vim.fn.readfile(filename, "", lnum + 1)
+				if #lines > lnum then
+					line = lines[lnum + 1]
 				end
 			end
+		end
 
-			if line then
-				-- Check for magic commands
-				-- 1. Start of line (e.g., !ls, %timeit)
-				-- 2. Assignment (e.g., x = !ls, df = %sql)
-				local is_magic = line:match("^%s*[!%%]") or line:match("=%s*[!%%]")
+		if line then
+			-- Check for magic commands
+			-- 1. Start of line (e.g., !ls, %timeit)
+			-- 2. Assignment (e.g., x = !ls, df = %sql)
+			local is_magic = line:match("^%s*[!%%]") or line:match("=%s*[!%%]")
 
-				if is_magic then
-					keep = false
-				end
+			if is_magic then
+				keep = false
 			end
 		end
 

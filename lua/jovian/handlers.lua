@@ -56,9 +56,28 @@ function M.handle_result_ready(msg)
 
 	local target_buf = State.cell_buf_map[msg.cell_id]
 	if target_buf and vim.api.nvim_buf_is_valid(target_buf) then
-		local start_t = State.cell_start_time[msg.cell_id]
-		if start_t and (os.time() - start_t) >= Config.options.notify_threshold then
-			UI.send_notification("Calculation " .. msg.cell_id .. " Finished!", "info")
+		local should_notify = false
+        local notify_msg = "Calculation " .. msg.cell_id .. " Finished!"
+        
+        if State.batch_execution then
+            State.batch_execution.current = State.batch_execution.current + 1
+            if State.batch_execution.current >= State.batch_execution.total then
+                local batch_dur = os.time() - State.batch_execution.start_time
+                if batch_dur >= Config.options.notify_threshold then
+                    should_notify = true
+                    notify_msg = "Run All Finished (" .. batch_dur .. "s)"
+                end
+                State.batch_execution = nil
+            end
+        else
+            local start_t = State.cell_start_time[msg.cell_id]
+            if start_t and (os.time() - start_t) >= Config.options.notify_threshold then
+                should_notify = true
+            end
+        end
+
+		if should_notify then
+			UI.send_notification(notify_msg, "info")
 		end
 		vim.api.nvim_buf_clear_namespace(target_buf, State.diag_ns, 0, -1)
 

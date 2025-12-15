@@ -97,8 +97,8 @@ print(df)
 # %% id="ZiL5ICSQW54J"
 from tqdm import tqdm
 print("Starting long task with tqdm...")
-for i in tqdm(range(20)):
-    time.sleep(0.1)
+for i in tqdm(range(10)):
+    time.sleep(1)
 print("Done!")
 
 # %% [markdown]

@@ -31,4 +31,6 @@ M.cell_start_line = {} -- { cell_id: line_num }
 
 M.on_ready_callbacks = {} -- List of functions to call when kernel is ready
 
+M.batch_execution = nil -- { total = int, current = int, start_time = timestamp }
+
 return M

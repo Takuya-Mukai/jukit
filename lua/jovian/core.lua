@@ -426,10 +426,13 @@ function M.run_all_cells()
 	end
 	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
 	local blk, bid, is_code = {}, "scratchpad", true
+    
+    local queue = {}
+
 	for i, line in ipairs(lines) do
 		if line:match("^# %%%%") then
 			if #blk > 0 and is_code then
-				M.send_payload(table.concat(blk, "\n"), bid, fn)
+                table.insert(queue, { code = table.concat(blk, "\n"), id = bid })
 			end
 			blk, bid = {}, Cell.ensure_cell_id(i, line)
 			is_code = not line:lower():match("^# %%%%+%s*%[markdown%]")
@@ -440,8 +443,15 @@ function M.run_all_cells()
 		end
 	end
 	if #blk > 0 and is_code then
-		M.send_payload(table.concat(blk, "\n"), bid, fn)
+        table.insert(queue, { code = table.concat(blk, "\n"), id = bid })
 	end
+
+    if #queue > 0 then
+        State.batch_execution = { total = #queue, current = 0, start_time = os.time() }
+        for _, item in ipairs(queue) do
+            M.send_payload(item.code, item.id, fn)
+        end
+    end
 end
 
 function M.run_cells_above()
@@ -463,10 +473,12 @@ function M.run_cells_above()
 	local lines = vim.api.nvim_buf_get_lines(0, 0, end_line, false)
     
 	local blk, bid, is_code = {}, "scratchpad", true
+    local queue = {}
+
 	for i, line in ipairs(lines) do
 		if line:match("^# %%%%") then
 			if #blk > 0 and is_code then
-				M.send_payload(table.concat(blk, "\n"), bid, fn)
+                table.insert(queue, { code = table.concat(blk, "\n"), id = bid })
 			end
 			blk, bid = {}, Cell.ensure_cell_id(i, line)
 			is_code = not line:lower():match("^# %%%%+%s*%[markdown%]")
@@ -477,8 +489,15 @@ function M.run_cells_above()
 		end
 	end
 	if #blk > 0 and is_code then
-		M.send_payload(table.concat(blk, "\n"), bid, fn)
+        table.insert(queue, { code = table.concat(blk, "\n"), id = bid })
 	end
+
+    if #queue > 0 then
+        State.batch_execution = { total = #queue, current = 0, start_time = os.time() }
+        for _, item in ipairs(queue) do
+            M.send_payload(item.code, item.id, fn)
+        end
+    end
 end
 
 function M.view_dataframe(args)
